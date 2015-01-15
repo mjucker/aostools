@@ -136,4 +136,21 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
     outFile.close()
     print text+' file '+outFileName
 
+## Read a file, and show the variables contained in it
+#
+def ReadFile(fileName,mode='r'):
+    """Reads netCDF4 file fileName and shows available variables.
+        
+        INPUTS:
+        fileName: full path to file
+        mode:     'r' for read only, 'w' for write, 'r+' for read-write
+        OUTPUTS:
+        file:     netCDF4 Dataset
+    """
+    file=nc.Dataset(fileName,mode)
+    print 'All variables:',file.variables.keys()
+    for v in file.variables.keys():
+        if v not in file.dimensions:
+            print file.variables[v]
+    return file
 
