@@ -1,5 +1,5 @@
  #!/usr/bin/python
-# Filename: tools.py
+# Filename: io.py
 #
 # Code by Martin Jucker, distributed under an MIT License
 # Any publication benefitting from this piece of code should cite
