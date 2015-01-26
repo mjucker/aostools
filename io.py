@@ -10,6 +10,45 @@
 
 ############################################################################################
 
+
+## copy all dimensions from one file to the other
+def CopyDims(inFile, outFile, onlyDims=[]):
+    """Copy all dimensions from one file to the other.
+        
+        INPUTS:
+        inFile  - netCDF4 Dataset of file containing the dimensions
+        outFile - netCDF4 Dataset of file to which dimensions will be copied
+        onlyDims- copy only specified dimensions
+        OUTPUTS:
+        outFile - netCDF4 Dataset containing the same dimensions as inFile
+        """
+    for dim in inFile.dimensions:
+        copyDim = True
+        if len(onlyDims) > 0 and dim not in onlyDims:
+            copyDim = False
+        if copyDim:
+            outDim = outFile.createDimension(dim,len(inFile.dimensions[dim]))
+            inVar = inFile.variables[dim]
+            outVar = outFile.createVariable(dim, str(inFile.variables[dim].dtype),(dim,))
+            outVar = CopyAtts(inVar, outVar)
+            outVar[:] = inVar[:]
+    return outFile
+#
+## copy all attributes of one variable to another
+def CopyAtts(inVar, outVar):
+    """Copy all attributes of one variable to the other
+        
+        INPUTS:
+        inVar  - netCDF4 variable containing attributes to copy
+        outVar - netCDF4 variable to which attributes will be copied
+        OUTPUTS:
+        outVar - netCDF4 variable with all copied attributes
+        """
+    for att in inVar.ncattrs():
+        outVar.setncattr(att,inVar.getncattr(att))
+    return outVar
+#
+
 ## check if dimension already exists, and if so, create new dimension name
 #
 def MakeNewDimensionName(file,dimName):
@@ -135,6 +174,47 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
     vOut[:] = data
     outFile.close()
     print text+' file '+outFileName
+#
+# write a new file, with the same structure as an existing file
+#  or add data to existing file
+def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
+    """Write a new file with data, but dimensions from an existing file.
+        Appends the new variable if outFileName==inFileName.
+        
+        New file will have one field, data, with name varName, and the
+        dimensions given in dimNames. Also takes care of edge dimensions.
+        
+        INPUTS:
+        data        - the variable to be put into the new file
+        varName     - the name of the variable in the file
+        outFileName - the name of the new file
+        dimNames    - names of the dimensions to be copied from
+        the existing file
+        inFileName  - name of the existing file to copy dimensions
+        if inFileName == outFileName, append variable
+        """
+    import netCDF4 as nc
+    if outFileName != inFileName:
+        inFile  = nc.Dataset(inFileName ,'r')
+        outFile = nc.Dataset(outFileName,'w',format=inFile.file_format)
+        dimNamesTmp = dimNames[:]
+        for dim in dimNames:
+            try:
+                edgeDim = inFile.variables[dim].getncattr('edges')
+                dimNamesTmp.append(edgeDim)
+            except:
+                pass
+        outFile = CopyDims(inFile, outFile, dimNamesTmp)
+        inFile.close()
+    else:
+        outFile = nc.Dataset(inFileName ,'a')
+    outVar = outFile.createVariable(varName, 'f8', dimNames)
+    outVar[:] = data
+    outFile.close()
+    if outFileName != inFileName:
+        print 'Done, written file '+outFileName
+    else:
+        print 'Done, appended variable to '+outFileName
 
 ## Read a file, and show the variables contained in it
 #
