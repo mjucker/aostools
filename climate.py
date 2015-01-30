@@ -77,6 +77,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     elif totalNumDays % 365 == 0:
         daysPerYear = 365
         daysPerMonths = [31,28,31,30,31,30,31,31,30,31,30,31]
+    else:
+        raise Exception("Cannot deal with years that are not 360 or 365 days. This data has "+str(totalNumDays)+" days.")
     stepsPerYear  = daysPerYear/timeStep
     totalNumYears = totalNumDays/daysPerYear
     print 'The simulation is',totalNumDays,'days long, which I assume means',totalNumYears,'years of',daysPerYear,'days.'
