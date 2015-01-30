@@ -124,6 +124,8 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
         mode = 'w'
         text = 'Created'
     outFile = nc.Dataset(outFileName, mode, format='NETCDF3_64BIT')
+    if varName in outFile.variables:
+        raise Exception('Variable '+varName+' already present in file '+outFileName+'. Stopping')
     # check if dimensions x,y,z already exist, and add them if not
     if len(x) > 0:
         checkDim = CheckDimension(outFile,'x',x)
@@ -218,19 +220,22 @@ def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
 
 ## Read a file, and show the variables contained in it
 #
-def ReadFile(fileName,mode='r'):
+def ReadFile(fileName,show='short',mode='r'):
     """Reads netCDF4 file fileName and shows available variables.
         
         INPUTS:
         fileName: full path to file
+        show:     how much detail to show; 'short' for one line, 'full'
+                    for full dimensionality and attributes
         mode:     'r' for read only, 'w' for write, 'r+' for read-write
         OUTPUTS:
         file:     netCDF4 Dataset
     """
     file=nc.Dataset(fileName,mode)
     print 'All variables:',file.variables.keys()
-    for v in file.variables.keys():
-        if v not in file.dimensions:
-            print file.variables[v]
+    if show == 'full':
+        for v in file.variables.keys():
+            if v not in file.dimensions:
+                print file.variables[v]
     return file
 
