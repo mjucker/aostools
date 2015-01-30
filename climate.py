@@ -143,7 +143,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
             inVar  = ncFile.variables[dim]
             outVar = outFile.createVariable(dim,str(ncFile.variables[dim].dtype),(dim,))
             outVar[:] = inVar[:]
-            outVar = CopyAtts(inVar, outVar)
+            for att in inVar.ncattrs():
+                outVar.setncattr(att,inVar.getncattr(att))
         elif climType == 'daily' or climType == 'monthly':
             nTime = np.shape(includeSteps)[1]
             if climType == 'daily':
@@ -194,7 +195,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
             else:
                 outVar[:] = tmpAvg
             inVar = ncFile.variables[var]
-            outVar = CopyAtts(inVar, outVar)
+            for att in inVar.ncattrs():
+                outVar.setncattr(att,inVar.getncattr(att))
 
     ncFile.close()
     outFile.close()
