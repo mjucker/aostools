@@ -99,7 +99,7 @@ def CheckDimension(file,dimName,dimVal):
 
 ## create a generic netCDF file that can be read with pv_atmos
 #
-def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
+def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimNames=['x','y','z','time']):
     """Write netCDF file that is compatible with pv_atmos.
         
         Takes one variable, and stores it inside a generic netCDF file.
@@ -110,6 +110,7 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
         data        - data to be written. Should be one variable.
         varName     - name of the variable data in the new netCDF file
         outFileName - name of (new) netCDF file. If exists already, variable is added.
+        dimNames    - names of the output dimensions
         NOTE: if outFileName already exists, the dimensions in the file have to
         correspond to the dimensions given as inputs.
         """
@@ -124,13 +125,11 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
         mode = 'w'
         text = 'Created'
     outFile = nc.Dataset(outFileName, mode, format='NETCDF3_64BIT')
-    if varName in outFile.variables:
-        raise Exception('Variable '+varName+' already present in file '+outFileName+'. Stopping')
     # check if dimensions x,y,z already exist, and add them if not
     if len(x) > 0:
-        checkDim = CheckDimension(outFile,'x',x)
+        checkDim = CheckDimension(outFile,dimNames[0],x)
         if checkDim == 'exists':
-            checkDim = 'x'
+            checkDim = dimNames[0]
         else:
             xD = outFile.createDimension(checkDim,len(x))
             xV = outFile.createVariable(checkDim,'f4', (checkDim,))
@@ -139,9 +138,9 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
             xV.setncattr('cartesian_axis','X')
         dims = (checkDim,) + dims
     if len(y) > 0:
-        checkDim = CheckDimension(outFile,'y',y)
+        checkDim = CheckDimension(outFile,dimNames[1],y)
         if checkDim == 'exists':
-            checkDim = 'y'
+            checkDim = dimNames[1]
         else:
             yD = outFile.createDimension(checkDim,len(y))
             yV = outFile.createVariable(checkDim,'f4', (checkDim,))
@@ -150,9 +149,9 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
             yV.setncattr('cartesian_axis','Y')
         dims = (checkDim,) + dims
     if len(z) > 0:
-        checkDim = CheckDimension(outFile,'z',z)
+        checkDim = CheckDimension(outFile,dimNames[2],z)
         if checkDim == 'exists':
-            checkDim = 'z'
+            checkDim = dimNames[2]
         else:
             zD = outFile.createDimension(checkDim,len(z))
             zV = outFile.createVariable(checkDim,'f4', (checkDim,))
@@ -161,9 +160,9 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc'):
             zV.setncattr('cartesian_axis','Z')
         dims = (checkDim,) + dims
     if len(t) > 0:
-        checkDim = CheckDimension(outFile,'time',t)
+        checkDim = CheckDimension(outFile,dimNames[3],t)
         if checkDim == 'exists':
-            checkDim = 'time'
+            checkDim = dimNames[3]
         else:
             tD = outFile.createDimension(checkDim,len(t))
             tV = outFile.createVariable(checkDim,'f4', (checkDim,))
@@ -220,22 +219,19 @@ def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
 
 ## Read a file, and show the variables contained in it
 #
-def ReadFile(fileName,show='short',mode='r'):
+def ReadFile(fileName,mode='r'):
     """Reads netCDF4 file fileName and shows available variables.
         
         INPUTS:
         fileName: full path to file
-        show:     how much detail to show; 'short' for one line, 'full'
-                    for full dimensionality and attributes
         mode:     'r' for read only, 'w' for write, 'r+' for read-write
         OUTPUTS:
         file:     netCDF4 Dataset
     """
     file=nc.Dataset(fileName,mode)
     print 'All variables:',file.variables.keys()
-    if show == 'full':
-        for v in file.variables.keys():
-            if v not in file.dimensions:
-                print file.variables[v]
+    for v in file.variables.keys():
+        if v not in file.dimensions:
+            print file.variables[v]
     return file
 
