@@ -224,14 +224,17 @@ def ReadFile(fileName,mode='r'):
         
         INPUTS:
         fileName: full path to file
+        show:     how much detail to show; 'short' for one line, 'full'
+                    for full dimensionality and attributes
         mode:     'r' for read only, 'w' for write, 'r+' for read-write
         OUTPUTS:
         file:     netCDF4 Dataset
     """
     file=nc.Dataset(fileName,mode)
     print 'All variables:',file.variables.keys()
-    for v in file.variables.keys():
-        if v not in file.dimensions:
-            print file.variables[v]
+    if show == 'full':
+        for v in file.variables.keys():
+            if v not in file.dimensions:
+                print file.variables[v]
     return file
 
