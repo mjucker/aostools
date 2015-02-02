@@ -219,7 +219,7 @@ def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
 
 ## Read a file, and show the variables contained in it
 #
-def ReadFile(fileName,mode='r'):
+def ReadFile(fileName, show='short', mode='r'):
     """Reads netCDF4 file fileName and shows available variables.
         
         INPUTS:
