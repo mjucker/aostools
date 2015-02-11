@@ -536,7 +536,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90):
     return integ
 
 ##############################################################################################
-def GetWaves(x,y=[],wave=0,axis=-1,do_anomaly=False):
+def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
     from numpy import fft,squeeze
     x = AxRoll(x,axis)
     #compute anomalies
@@ -548,18 +548,18 @@ def GetWaves(x,y=[],wave=0,axis=-1,do_anomaly=False):
             y = GetAnomaly(y,0)
     #Fourier decompose
     x = fft.fft(x,axis=0)
-    if wave == 0:
+    if wave < 0:
         xym = zeros_like(x)
     if len(y) > 0:
         y = fft.fft(y,axis=0)
         #Take out the waves - there's a magic factor of two
         nl  = x.shape[0]**2
         xym  = 2*real(x*y.conj())/nl
-        if wave > 0:
+        if wave >= 0:
             xym = xym[wave,:]/nl
     else:
         mask = zeros_like(x)
-        if wave > 0:
+        if wave >= 0:
             mask[wave,:] = 1
             xym = real(fft.ifft(x*mask,axis=0))
         else:
@@ -586,7 +586,7 @@ def GetAnomaly(x,axis=-1):
     #compute anomalies
     xt = xt - xt.mean(axis=0)[newaxis,:]
     #bring axis back to where it was
-    x = AxRoll(xt,0,'i')
+    x = AxRoll(xt,axis,'i')
     return x
 #
 def AxRoll(x,ax,start_mode=0):
