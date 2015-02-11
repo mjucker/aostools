@@ -561,9 +561,10 @@ def GetWaves(x,y=[],wave=0,axis=-1):
             mask[wave,:] = 1
             xym = real(fft.ifft(x*mask,axis=0))
         else:
+            xym = zeros_like(x)
             for m in range(x.shape[0]):
                 mask[m,:] = 1
-                xym[m,:] = real(fft.ifft(x*mask,axis=0))
+                xym[m,:] = real(fft.ifft(x*mask,axis=0)).mean(axis=0)
                 mask[m,:] = 0
     xym = AxRoll(xym,axis,'i')
     return xym
