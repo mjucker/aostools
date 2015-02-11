@@ -510,22 +510,29 @@ def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat
 
 
 ##############################################################################################
-def GlobalAvg(lat,data,lim=60,mx=90):
+def GlobalAvg(lat,data,axis=-1,lim=60,mx=90):
     """Compute cosine weighted meridional average from lim to mx.
 
     INPUTS:
       lat  - latitude
       data - data to average N x latitude
+      axis - axis designating latitude
       lim  - starting latitude to average
       mx   - stopping latitude to average
     OUTPUTS:
       integ- averaged data
     """
-    from numpy import trapz,cos
+    from numpy import trapz,cos,prod,reshape,newaxis
+    #get data into the correct shape
+    tmp = AxRoll(data,axis)
+    shpe= tmp.shape
+    tmp = reshape(tmp,(shpe[0],prod(shpe[1:])))
+    #cosine weighting
     J = find((lat>=lim)*(lat<=mx))
     coslat = cos(lat*pi/180.)
     coswgt = trapz(coslat[J],lat[J])
-    integ = trapz(data[:,J]*coslat[J],lat[J])/coswgt
+    tmp = trapz(tmp[J,:]*coslat[J,newaxis],lat[J],axis=0)/coswgt
+    integ = reshape(tmp,shpe[1:])
     return integ
 
 ##############################################################################################
