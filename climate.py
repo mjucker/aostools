@@ -63,6 +63,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     elif 'months' in timeVar.units:
         timeStepFact = 30
         timeUnits = 'months'
+    else:
+        raise Exception("I don't understand the time unit: "+timeVar.units)
     timeStep = np.diff(timeVar).mean()*timeStepFact
     print 'The time dimension is in units of',timeUnits,', with a time step of',timeStep,'days'
 
@@ -608,4 +610,133 @@ def AxRoll(x,ax,start_mode=0):
     else:
         raise Exception("mode must be 'f' for forward or 'i' for inverse")
     return y
-      
+
+
+#######################################################
+def ComputeEpFluxes(lat,pres,upvp,vptp,t):
+    """ Compute the EP-flux vectors and divergence terms.
+        
+        The vectors are normalized to be plotted in cartesian (linear)
+        coordinates from -90 to 90 degrees and from 1000-0hPa
+        The divergence is in units of m/s/day, and therefore represents
+        the deceleration of the zonal wind.
+        
+        INPUTS:
+        lat    - latitude [degrees]
+        pres   - pressure [hPa]
+        upvp   - [u'v'], shape(time,p,lat)
+        vptp   - [v'T'], shape(time,p,lat)
+        t      - [T]   , shape(time,p,lat)
+        avgdiv - whether or not to average the divergences over all times
+        OUTPUTS:
+        ep1  - meridional EP-flux component [m2/s2]
+        ep2  - vertical   EP-flux component [hPa m/s2]
+        div1 - horizontal EP-flux divergence [m/s/day]
+        div2 - horizontal EP-flux divergence [m/s/day]
+        """
+    from numpy import cos,tan,mat,newaxis,reshape,mat,gradient
+    # some constants
+    R     = 287.04
+    cp    = 1004
+    kappa = R/cp
+    p0    = 1000
+    Omega = 2*pi/(24*3600)
+    a0    = 6.378e6
+    f     = 2*Omega*sin(lat*pi/180)
+    #
+    #
+    ## compute vertical component of EP flux.
+    #
+    # vptp = [v'theta']
+    pp0  = (p0/pres[newaxis,:,newaxis])**kappa
+    vptp = vptp*pp0
+    #
+    # dtdp = [theta]_p:
+    # using the gradient function
+    dp   = gradient(pres)[newaxis,:,newaxis]*100
+    dtdp = gradient(theta,1,dp,1)[1]
+    dtdp = sum(dtdp==0)/prod(dtdp.shape)
+    dtdp[dtdp==0] = NaN
+    #
+    # ep2 = f [v'theta'] / [theta]_p, units of hPa.m/s2
+    ep2 = f[newaxis,newaxis,:]*vptp/dtdp
+    #
+    ## compute the horizontal component, units of m.m/s2
+    ep1 = -upvp
+    #
+    ## compute divergence
+    #
+    # div1 = 1/a0 d/d phi [-u'v'] + 2/a0 tan(phi)[-u'v'], units of m/s2
+    # div2 = f d/dp ([v'theta']/[theta]_p), units of m/s2
+    tanlat=tan(lat*pi/180)[newaxis,:]
+    div1 = zeros_like(ep1)
+    div2 = zeros_like(div1)
+    dphi = gradient(lat*pi/180)[newaxis,newaxis,:]
+    grad_ep1 = gradient(ep1,1,1 ,dphi)[2]
+    div1[t,:] = 1/a0*grad_ep1 + 2/a0*tanlat*ep1
+    div2[t,:] = gradient(ep2,1,dp,1   )[1]
+    # change to m/s/day
+    div1 = div1*86400
+    div2 = div2*86400
+    #
+    return squeeze(ep1),squeeze(ep2),squeeze(div1),squeeze(div2)
+
+
+#######################################################
+def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
+    """Convert value (probably vector component) of one unit
+        into another one.
+        
+        INPUTS:
+            data  - data to convert
+            mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
+            coord - values of latitude [degrees] or pressure [hPa]
+            axis  - axis of data which needs modification
+        OUTPUTS:
+            out   - converted from data
+    """
+    from numpy import cos,pi
+    # constants
+    a0    = 6.378e6
+    ps    = 1e3
+    H     = 7e3
+    # geometric quantitites
+    rad2deg = 180/pi
+    coslat  = cos(lat/rad2deg)
+    cosm1   = 1/coslat
+    gemfac  = rad2deg/a0
+    #
+    if mode is 'm2lat':
+        out = data*gemfac
+    elif mode is 'lat2m':
+        out = data/gemfac
+    elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
+        tmp = AxRoll(data,axis)
+        out = zeros_like(tmp)
+    else:
+        raise ValueError("mode not recognized")
+    if mode is 'm2lon':
+        for l in range(out.shape[0]):
+            out[l,:] = tmp[l,:]*cosm1
+        out = out*gemfac
+        out = AxRoll(out,axis,'i')
+    elif mode is 'lon2m':
+        for l in range(out.shape[0]):
+            out[l,:] = tmp[l,:]*coslat
+        out = out/gemfac
+    elif mode is 'm2hPa':
+        for p in range(out.shape[0]):
+            out[p,:] = -coord[p]*tmp[p,:]
+        out = out/H
+        out = AxRoll(out,axis,'i')
+    elif mode is 'hPa2m':
+        for p in range(out.shape[0]):
+            out[p,:] = -coord[p]/tmp[p,:]
+        out[tmp==0] = NaN
+        out = out*H
+        out = AxRoll(out,axis,'i')
+
+    return out
+
+
+
