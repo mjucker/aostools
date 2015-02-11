@@ -88,7 +88,7 @@ def CheckDimension(file,dimName,dimVal):
     from numpy import allclose
     if dimName in file.dimensions:
         if dimName not in file.variables:
-            raise Exception('Dimension '+dimName+' has no variable assiciated with it')
+            raise Exception('Dimension '+dimName+' has no variable associated with it')
         dimExist = file.variables[dimName][:]
         if  allclose(dimExist,dimVal):
             return 'exists'
@@ -175,6 +175,7 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
     vOut[:] = data
     outFile.close()
     print text+' file '+outFileName
+    print 'Used dimensions '+str(dims)
 #
 # write a new file, with the same structure as an existing file
 #  or add data to existing file
