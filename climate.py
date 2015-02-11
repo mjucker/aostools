@@ -332,33 +332,18 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
     ## compute psi
     print 'Computing psi'
     update_progress(0)
-    # pressure quantitites, p in hPa
-    pp0 = (p0/p[np.newaxis,:,np.newaxis])**kappa
-    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
-    # zonal means and eddy terms
-    v_bar = v.mean(axis=-1)
-    # Eulerian streamfunction
-    psi = np.cumsum(v_bar*dp,axis=1)
-    v = v - v_bar[:,:,:,np.newaxis] # v = v'
-    v_bar = []
-    update_progress(.25)
-    t_bar = t.mean(axis=-1)*pp0 # t_bar = theta_bar
-    t = v*(t*pp0[:,:,:,np.newaxis] - t_bar[:,:,:,np.newaxis]) # t = v'Th'
-    v = []
-    update_progress(.50)
 
-    dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
-    dthdp[dthdp==0] = np.NaN
-    t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
-    dthdp = []
-    t_bar = t.mean(axis=-1) # t_bar = bar(v'Th'/(dTh_bar/dp))
-    t = []
-    update_progress(.75)
+    v_bar,t_bar = compute_intv(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
+
+    # Eulerian streamfunction
+    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
+    psi = np.cumsum(v_bar*dp,axis=1)
+    v_bar=v=t=[]
+    update_progress(.50)
 
 
     ## compute psi* = psi - bar(v'Th'/(dTh_bar/dp))
     psis = psi - t_bar
-    v_bar = []
     t_bar = []
     psi = 2*np.pi*a0/g*psi *np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.)
     psis= 2*np.pi*a0/g*psis*np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.)
@@ -402,7 +387,27 @@ def update_progress(progress):
     text = "\rPercent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
     sys.stdout.write(text)
     sys.stdout.flush()
+#
+def compute_intv(v,t,p,p0=1e3):
 
+    # some constants
+    kappa = 2./7
+
+    # pressure quantitites, p in hPa
+    pp0 = (p0/p[np.newaxis,:,np.newaxis])**kappa
+    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
+    # zonal means and eddy terms
+    v_bar = v.mean(axis=-1)
+    v = v - v_bar[:,:,:,np.newaxis] # v = v'
+    t_bar = t.mean(axis=-1)*pp0 # t_bar = theta_bar
+    t = v*(t*pp0[:,:,:,np.newaxis] - t_bar[:,:,:,np.newaxis]) # t = v'Th'
+
+    dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
+    dthdp[dthdp==0] = np.NaN
+    t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
+    t_bar = t.mean(axis=-1) # t_bar = bar(v'Th'/(dTh_bar/dp))
+
+    return v_bar,t_bar
 
 ##############################################################################################
 def eof(X,n=1):
@@ -453,6 +458,144 @@ def eof(X,n=1):
     return EOF,PC,E,u[:,:n],sqrt(s[:n]),v.T[:,:n]
 
 
+##############################################################################################
+def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3, wkdir='./'):
+    """Computes the residual meridional wind v* (as a function of time).
+        
+        INPUTS:
+            inFileName  - filename of input file, relative to wkdir
+            outFileName - filename of output file, 'none', or 'same'
+            temp        - name of temperature field in inFile
+            vcomp       - name of meridional velocity field in inFile
+            lat         - name of latitude in inFile
+            pfull       - name of pressure in inFile [hPa]
+            time        - name of time field in inFile. Only needed if outFile used
+            p0          - pressure basis to compute potential temperature [hPa]
+            wkdir       - root directory, from with the paths inFile and outFile are taken
+        OUTPUTS:
+            vstar       - residual meridional wind, as a function of time
+    """
+    import netCDF4 as nc
+    import numpy as np
+
+    a0    = 6371000
+    g     = 9.81
+
+    # read input file
+    print 'Reading data'
+    update_progress(0)
+    if outFileName == 'same':
+        mode = 'a'
+    else:
+        mode = 'r'
+    inFile = nc.Dataset(wkdir + inFileName, mode)
+    t = inFile.variables[temp][:]
+    update_progress(.25)
+    v = inFile.variables[vcomp][:]
+    update_progress(.50)
+    l = inFile.variables[lat][:]
+    update_progress(.75)
+    p = inFile.variables[pfull][:]
+    update_progress(1)
 
 
+    v_bar,t_bar = compute_intv(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
 
+    # Eulerian streamfunction
+    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
+    vstar = v_bar - np.gradient(t_bar,1,dp,1)[1]
+
+    return vstar
+    
+
+
+##############################################################################################
+def GlobalAvg(lat,data,lim=60,mx=90):
+    """Compute cosine weighted meridional average from lim to mx.
+
+    INPUTS:
+      lat  - latitude
+      data - data to average N x latitude
+      lim  - starting latitude to average
+      mx   - stopping latitude to average
+    OUTPUTS:
+      integ- averaged data
+    """
+    from numpy import trapz,cos
+    J = find((lat>=lim)*(lat<=mx))
+    coslat = cos(lat*pi/180.)
+    coswgt = trapz(coslat[J],lat[J])
+    integ = trapz(data[:,J]*coslat[J],lat[J])/coswgt
+    return integ
+
+##############################################################################################
+def GetWaves(x,y=[],wave=0,axis=-1):
+    from numpy import fft,squeeze
+    x = AxRoll(x,axis)
+    #compute anomalies
+    x = GetAnomaly(x,0)
+    if len(y) > 0:
+        y = AxRoll(y,axis)
+        y = GetAnomaly(y,0)
+    #Fourier decompose
+    x = fft.fft(x,axis=0)
+    if wave == 0:
+        xym = zeros_like(x)
+    if len(y) > 0:
+        y = fft.fft(y,axis=0)
+        #Take out the waves - there's a magic factor of two
+        nl  = x.shape[0]**2
+        xym  = 2*real(x*y.conj())/nl
+        if wave > 0:
+            xym = xym[wave,:]/nl
+    else:
+        mask = zeros_like(x)
+        if wave > 0:
+            mask[wave,:] = 1
+            xym = real(fft.ifft(x*mask,axis=0))
+        else:
+            for m in range(x.shape[0]):
+                mask[m,:] = 1
+                xym[m,:] = real(fft.ifft(x*mask,axis=0))
+                mask[m,:] = 0
+    xym = AxRoll(xym,axis,'i')
+    return xym
+
+##helper functions
+def GetAnomaly(x,axis=-1):
+    """Computes the anomaly of array x along dimension axis.
+
+    INPUTS:
+      x    - array to compute anomalies from
+      axis - axis along dimension for anomalies
+    OUTPUTS:
+      x    - anomalous array
+    """
+    #bring axis to the front
+    xt= AxRoll(x,axis)
+    #compute anomalies
+    xt = xt - xt.mean(axis=0)[newaxis,:]
+    #bring axis back to where it was
+    x = AxRoll(xt,0,'i')
+    return x
+#
+def AxRoll(x,ax,start_mode=0):
+    from numpy import rollaxis
+    if isinstance(start_mode, basestring):
+        mode = start_mode
+    else:
+        mode = 'f'
+    #
+    if ax < 0:
+        n = len(x.shape) + ax
+    else:
+        n = ax
+    #
+    if mode is 'f':
+        y = rollaxis(x,n,start_mode)
+    elif mode is 'i':
+        y = rollaxis(x,0,n+1)
+    else:
+        raise Exception("mode must be 'f' for forward or 'i' for inverse")
+    return y
+      
