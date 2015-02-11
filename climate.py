@@ -510,7 +510,7 @@ def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat
 
 
 ##############################################################################################
-def GlobalAvg(lat,data,axis=-1,lim=60,mx=90):
+def GlobalAvg(lat,data,axis=-1,lim=20,mx=90):
     """Compute cosine weighted meridional average from lim to mx.
 
     INPUTS:
