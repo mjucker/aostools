@@ -25,6 +25,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
                     is written
         timeDim     name of the time dimension in the netcdf file
         Outputs:
+        outFile     name of the output file created
         writes outputfile with name depending on input file name and climatType
     """
 
@@ -205,6 +206,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     ncFile.close()
     outFile.close()
     print 'DONE, wrote file',outFileName
+    return outFileName
 
 ##############################################################################################
 def ComputeSaturationMixingRatio(T, p):
