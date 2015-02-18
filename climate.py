@@ -514,7 +514,7 @@ def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat
 
 
 ##############################################################################################
-def GlobalAvg(lat,data,axis=-1,lim=20,mx=90):
+def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     """Compute cosine weighted meridional average from lim to mx.
 
     INPUTS:
@@ -523,6 +523,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90):
       axis - axis designating latitude
       lim  - starting latitude to average
       mx   - stopping latitude to average
+      cosp - power of cosine weighting
     OUTPUTS:
       integ- averaged data
     """
@@ -533,9 +534,9 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90):
     tmp = reshape(tmp,(shpe[0],prod(shpe[1:])))
     #cosine weighting
     J = find((lat>=lim)*(lat<=mx))
-    coslat = cos(lat*pi/180.)
+    coslat = cos(lat*pi/180.)**cosp
     coswgt = trapz(coslat[J],lat[J])
-    tmp = trapz(tmp[J,:]*coslat[J,newaxis],lat[J],axis=0)/coswgt
+    tmp = trapz(tmp[J,:]*coslat[J][:,newaxis],lat[J],axis=0)/coswgt
     integ = reshape(tmp,shpe[1:])
     return integ
 
@@ -560,20 +561,19 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
         nl  = x.shape[0]**2
         xym  = 2*real(x*y.conj())/nl
         if wave >= 0:
-            xym = xym[wave,:]/nl
+            xym = xym[wave,:][newaxis,:]
     else:
         mask = zeros_like(x)
         if wave >= 0:
             mask[wave,:] = 1
             xym = real(fft.ifft(x*mask,axis=0))
         else:
-            xym = zeros_like(x)
             for m in range(x.shape[0]):
                 mask[m,:] = 1
                 xym[m,:] = real(fft.ifft(x*mask,axis=0)).mean(axis=0)
                 mask[m,:] = 0
     xym = AxRoll(xym,axis,'i')
-    return xym
+    return squeeze(xym)
 
 ##helper functions
 def GetAnomaly(x,axis=-1):
@@ -690,13 +690,13 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
         into another one.
         
         INPUTS:
-            data  - data to convert
-            mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
-            coord - values of latitude [degrees] or pressure [hPa]
-            axis  - axis of data which needs modification
+        data  - data to convert
+        mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
+        coord - values of latitude [degrees] or pressure [hPa]
+        axis  - axis of data which needs modification
         OUTPUTS:
-            out   - converted from data
-    """
+        out   - converted from data
+        """
     from numpy import cos,pi
     # constants
     a0    = 6.378e6
@@ -737,7 +737,7 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
         out[tmp==0] = NaN
         out = out*H
         out = AxRoll(out,axis,'i')
-
+    #
     return out
 
 
