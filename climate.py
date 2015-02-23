@@ -392,7 +392,7 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 #
-def compute_intv(v,t,p,p0=1e3):
+def compute_intv(v,t,p,p0=1e3,wave=-1):
 
     # some constants
     kappa = 2./7
@@ -402,9 +402,16 @@ def compute_intv(v,t,p,p0=1e3):
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
     # zonal means and eddy terms
     v_bar = v.mean(axis=-1)
-    v = v - v_bar[:,:,:,np.newaxis] # v = v'
+    if wave < 0:
+        v = GetAnomaly(v)
+    else:
+        v = GetWaves(v,wave=wave,do_anomaly=True)
     t_bar = t.mean(axis=-1)*pp0 # t_bar = theta_bar
-    t = v*(t*pp0[:,:,:,np.newaxis] - t_bar[:,:,:,np.newaxis]) # t = v'Th'
+    if wave < 0:
+        t = GetAnomaly(t)
+    else:
+        t = GetWaves(t,wave=wave,do_anomaly=True)
+    t = v*t # t = v'Th'
 
     dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
@@ -463,19 +470,17 @@ def eof(X,n=1):
 
 
 ##############################################################################################
-def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3, wkdir='./'):
+def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3, wkdir='./'):
     """Computes the residual meridional wind v* (as a function of time).
         
         INPUTS:
-            inFileName  - filename of input file, relative to wkdir
-            outFileName - filename of output file, 'none', or 'same'
-            temp        - name of temperature field in inFile
-            vcomp       - name of meridional velocity field in inFile
-            lat         - name of latitude in inFile
-            pfull       - name of pressure in inFile [hPa]
-            time        - name of time field in inFile. Only needed if outFile used
-            p0          - pressure basis to compute potential temperature [hPa]
-            wkdir       - root directory, from with the paths inFile and outFile are taken
+            data  - filename of input file, relative to wkdir, or list with (T,v,pfull)
+            temp  - name of temperature field in inFile
+            vcomp - name of meridional velocity field in inFile
+            pfull - name of pressure in inFile [hPa]
+            wave  - decompose into given wave number contribution if wave>=0
+            p0    - pressure basis to compute potential temperature [hPa]
+            wkdir - root directory, from with the paths inFile and outFile are taken
         OUTPUTS:
             vstar       - residual meridional wind, as a function of time
     """
@@ -486,25 +491,24 @@ def ComputeVstar(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat
     g     = 9.81
 
     # read input file
-    print 'Reading data'
-    update_progress(0)
-    if outFileName == 'same':
-        mode = 'a'
+    if isinstance(data,str):
+        print 'Reading data'
+        update_progress(0)
+        #
+        inFile = nc.Dataset(wkdir + data, 'r')
+        t = inFile.variables[temp][:]
+        update_progress(.45)
+        v = inFile.variables[vcomp][:]
+        update_progress(.90)
+        p = inFile.variables[pfull][:]
+        update_progress(1)
+        #
+        v_bar,t_bar = compute_intv(v,t,p,p0,wave=wave)
     else:
-        mode = 'r'
-    inFile = nc.Dataset(wkdir + inFileName, mode)
-    t = inFile.variables[temp][:]
-    update_progress(.25)
-    v = inFile.variables[vcomp][:]
-    update_progress(.50)
-    l = inFile.variables[lat][:]
-    update_progress(.75)
-    p = inFile.variables[pfull][:]
-    update_progress(1)
-
-
-    v_bar,t_bar = compute_intv(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
-
+        p = data[2]
+        v_bar,t_bar = compute_intv(data[1],data[0],p,p0,wave=wave)
+    # t_bar = bar(v'Th'/(dTh_bar/dp))
+    #
     # Eulerian streamfunction
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
     vstar = v_bar - np.gradient(t_bar,1,dp,1)[1]
