@@ -11,6 +11,13 @@
 ############################################################################################
 #
 # compute climatologies
+
+## helper function: check if string contained in upper level string
+def checkAny(set,string):
+    for c in set:
+        if c in string: return 1
+        return 0
+
 def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     """Compute climatologies from netCDF files.
         
@@ -55,13 +62,18 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     # Now, find out about the units and thus the time step interval in units of days
 
     timeVar = ncFile.variables[timeDim]
-    if 'seconds' in timeVar.units:
+    timeUnits = timeVar.units
+    chck = checkAny(('seconds','days','months'),timeUnits)
+    if not chck:
+        print 'Cannot understand units of time, which is '+timeUnits
+        timeUnits = raw_input('Please provide units [seconds,days,months] ')
+    if 'seconds' in timeUnits:
         timeStepFact = 1./86400
         timeUnits = 'seconds'
-    elif 'days' in timeVar.units:
+    elif 'days' in timeUnits:
         timeStepFact = 1
         timeUnits = 'days'
-    elif 'months' in timeVar.units:
+    elif 'months' in timeUnits:
         timeStepFact = 30
         timeUnits = 'months'
     else:
