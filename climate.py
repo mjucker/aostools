@@ -187,6 +187,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     print 'Averaging variables:'
     for var in ncFile.variables:
         varShape = np.shape(ncFile.variables[var])
+        if len(varShape) == 0: continue
         if varShape[0] == numTimeSteps and len(varShape) >= 2:
             print '                     ',var
             tmpVar = ncFile.variables[var][:]
