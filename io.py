@@ -231,6 +231,7 @@ def ReadFile(fileName, show='short', mode='r'):
         OUTPUTS:
         file:     netCDF4 Dataset
     """
+    import netCDF4 as nc
     file=nc.Dataset(fileName,mode)
     print 'All variables:',file.variables.keys()
     if show == 'full':
