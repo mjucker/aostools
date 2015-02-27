@@ -406,26 +406,24 @@ def update_progress(progress):
     sys.stdout.flush()
 #
 def compute_intv(v,t,p,p0=1e3,wave=-1):
-
+    #
     # some constants
     kappa = 2./7
-
+    #
     # pressure quantitites, p in hPa
-    pp0 = (p0/p[np.newaxis,:,np.newaxis])**kappa
+    pp0 = (p0/p[np.newaxis,:,np.newaxis,np.newaxis])**kappa
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
-    # zonal means and eddy terms
+    # convert to potential temperature
+    t = t*pp0 # t = theta
+    # zonal means
     v_bar = v.mean(axis=-1)
+    t_bar = t.mean(axis=-1) # t_bar = theta_bar
     if wave < 0:
         v = GetAnomaly(v)
-    else:
-        v = GetWaves(v,wave=wave,do_anomaly=True)
-    t_bar = t.mean(axis=-1)*pp0 # t_bar = theta_bar
-    if wave < 0:
         t = GetAnomaly(t)
     else:
-        t = GetWaves(t,wave=wave,do_anomaly=True)
-    t = v*t # t = v'Th'
-
+        t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = v'Th'
+    #
     dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
     t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
