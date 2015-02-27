@@ -350,7 +350,7 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
     print 'Computing psi'
     update_progress(0)
 
-    v_bar,t_bar = compute_intv(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
+    v_bar,t_bar = ComputeVertEddy(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
 
     # Eulerian streamfunction
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
@@ -405,7 +405,20 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 #
-def compute_intv(v,t,p,p0=1e3,wave=-1):
+def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
+    """ Computes the vertical eddy components of the residual circulation,
+        bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
+        
+        INPUTS:
+            v    - meridional wind
+            t    - temperature
+            p    - pressure coordinate
+            p0   - reference pressure for potential temperature
+            wave - wave number (if >=0)
+        OUPUTS:
+            v_bar - zonal mean meridional wind
+            t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p>
+    """
     #
     # some constants
     kappa = 2./7
@@ -418,17 +431,20 @@ def compute_intv(v,t,p,p0=1e3,wave=-1):
     # zonal means
     v_bar = v.mean(axis=-1)
     t_bar = t.mean(axis=-1) # t_bar = theta_bar
+    # prepare pressure derivative
+    dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
+    dthdp[dthdp==0] = np.NaN
+    # now get wave component(s)
     if wave < 0:
         v = GetAnomaly(v)
         t = GetAnomaly(t)
+        t = v*t
+        t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
+        t_bar = t.mean(axis=-1) # t_bar = bar(v'Th'/(dTh_bar/dp))
     else:
-        t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = v'Th'
+        t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = v'Th'_{k=wave}
+        t_bar = t/dthdp # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
-    dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
-    dthdp[dthdp==0] = np.NaN
-    t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
-    t_bar = t.mean(axis=-1) # t_bar = bar(v'Th'/(dTh_bar/dp))
-
     return v_bar,t_bar
 
 ##############################################################################################
@@ -491,7 +507,7 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
             pfull - name of pressure in inFile [hPa]
             wave  - decompose into given wave number contribution if wave>=0
             p0    - pressure basis to compute potential temperature [hPa]
-            wkdir - root directory, from with the paths inFile and outFile are taken
+            wkdir - root directory, from with the path to the input file is taken
         OUTPUTS:
             vstar       - residual meridional wind, as a function of time
     """
@@ -514,10 +530,10 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
         p = inFile.variables[pfull][:]
         update_progress(1)
         #
-        v_bar,t_bar = compute_intv(v,t,p,p0,wave=wave)
+        v_bar,t_bar = ComputeVertEddy(v,t,p,p0,wave=wave)
     else:
         p = data[2]
-        v_bar,t_bar = compute_intv(data[1],data[0],p,p0,wave=wave)
+        v_bar,t_bar = ComputeVertEddy(data[1],data[0],p,p0,wave=wave)
     # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
     # Eulerian streamfunction
