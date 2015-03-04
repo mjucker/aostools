@@ -536,7 +536,6 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
         v_bar,t_bar = ComputeVertEddy(data[1],data[0],p,p0,wave=wave)
     # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
-    # Eulerian streamfunction
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
     vstar = v_bar - np.gradient(t_bar,1,dp,1)[1]
 
@@ -701,6 +700,9 @@ def ComputeEpFluxes(lat,pres,upvp,vptp,t):
     #
     # div1 = 1/a0 d/d phi [-u'v'] + 2/a0 tan(phi)[-u'v'], units of m/s2
     # div2 = f d/dp ([v'theta']/[theta]_p), units of m/s2
+    # note: usually, div1 and div2 are multiplied by a*cos(phi), with m2/s2.
+    # physically, this does not make much sense, and the factor a*cos(phi) is
+    # divided out again when computing v*.
     tanlat=tan(lat*pi/180)[newaxis,:]
     div1 = zeros_like(ep1)
     div2 = zeros_like(div1)
