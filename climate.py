@@ -65,7 +65,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     timeUnits = timeVar.units
     chck = checkAny(('seconds','days','months'),timeUnits)
     if not chck:
-        print 'Cannot understand units of time, which is '+timeUnits
+        print 'Cannot understand units of time, which is: '+timeUnits
         timeUnits = raw_input('Please provide units [seconds,days,months] ')
     if 'seconds' in timeUnits:
         timeStepFact = 1./86400
