@@ -13,7 +13,7 @@
 # compute climatologies
 
 ## helper function: check if string contained in upper level string
-def checkAny(set,string):
+def CheckAny(set,string):
     for c in set:
         if c in string: return 1
         return 0
@@ -63,7 +63,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
 
     timeVar = ncFile.variables[timeDim]
     timeUnits = timeVar.units
-    chck = checkAny(('seconds','days','months'),timeUnits)
+    chck = CheckAny(('seconds','days','months'),timeUnits)
     if not chck:
         print 'Cannot understand units of time, which is: '+timeUnits
         timeUnits = raw_input('Please provide units [seconds,days,months] ')
@@ -78,6 +78,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
         timeUnits = 'months'
     else:
         raise Exception("I don't understand the time unit: "+timeVar.units)
+    if np.diff(timeVar).min() != np.diff(timeVar).max():
+        raise Exception("The time step is not constant, but varies between "+str(diff(timeVar).min())+" and "+str(diff(timeVar).max()))
     timeStep = np.diff(timeVar).mean()*timeStepFact
     print 'The time dimension is in units of',timeUnits,', with a time step of',timeStep,'days'
 
