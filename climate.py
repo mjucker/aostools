@@ -95,7 +95,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
         daysPerYear = 365
         daysPerMonths = [31,28,31,30,31,30,31,31,30,31,30,31]
     else:
-        raise Exception("Cannot deal with years that are not 360 or 365 days. This data has "+str(totalNumDays)+" days.")
+        raise Exception("File "+wkdir+file+": Cannot deal with years that are not 360 or 365 days. This data has "+str(totalNumDays)+" days.")
     stepsPerYear  = daysPerYear/timeStep
     totalNumYears = totalNumDays/daysPerYear
     print 'The simulation is',totalNumDays,'days long, which I assume means',totalNumYears,'years of',daysPerYear,'days.'
@@ -421,6 +421,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
             v_bar - zonal mean meridional wind
             t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p>
     """
+    import numpy as np
     #
     # some constants
     kappa = 2./7
@@ -617,6 +618,7 @@ def GetAnomaly(x,axis=-1):
     OUTPUTS:
       x    - anomalous array
     """
+    from numpy import newaxis
     #bring axis to the front
     xt= AxRoll(x,axis)
     #compute anomalies
