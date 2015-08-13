@@ -488,7 +488,7 @@ def eof(X,n=1):
     # u.shape = (space, modes(space)), v.shape = (modes(space), time)
 
     # get the first n modes, in physical units
-    #  we can either project the date onto  the principal component, F*V
+    #  we can either project the data onto the principal component, F*V
     #  or multiply u*s. This is the same, as U*S*V.H*V = U*S
     EOF = np.dot(u[:,:n],diag(s)[:n,:n])
     # time evolution is in v
@@ -500,6 +500,63 @@ def eof(X,n=1):
 
     return EOF,PC,E,u[:,:n],sqrt(s[:n]),v.T[:,:n]
 
+
+##############################################################################################
+def ComputeAnnularMode(lat, pres, time, data, choice='z'):
+    """Compute annular mode as in Geber et al, GRL 2008.
+        This is basically the first PC, but normalized to unit variance and zero mean.
+        
+        INPUTS:
+            lat    - latitude
+            pres   - pressure
+            time   - time
+            data   - variable to compute EOF from. This is typically
+                        geopotential or zonal wind.
+                        Size time x pres x lat (ie zonal mean)
+            choice - not essential, but used for sign convention.
+                        If 'z', the sign is determined based on 70-80N.
+                        Otherwise, 50-60N is used.
+        OUTPUT:
+            AM     - The annular mode, size time x pres
+    """
+    import numpy as np
+    from matplotlib.mlab import find
+    #
+    AM = np.zeros((len(time),len(pres)))
+    j_tmp = find(lat > 20)
+    coslat = np.cos(lat*np.pi/180.)
+    negCos = (coslat < 0.)
+    coslat[negCos] = 0.
+    # weighting as in Gerber et al GRL 2008
+    sqrtcoslat = np.sqrt(coslat[j_tmp])
+    # try to get the sign right
+    # first possibility
+    if choice == 'z':
+        minj = 70
+        maxj = 80
+        sig = -1
+    else:
+        minj = 50
+        maxj = 60
+        sig = 1
+    jj = (lat[j_tmp] > minj)*(lat[j_tmp] < maxj)
+    # second possibility
+    #jj = abs(lat[j_tmp]-80).argmin()
+    #sig = -1
+    for k in range(len(pres)):
+        # remove global mean
+        globZ = GlobalAvg(lat,data[:,k,:],axis=-1)
+        var = data[:,k,:] - globZ[:,np.newaxis]
+        # area weighting: EOFs are ~variance, thus take sqrt(cos)
+        var = var[:,j_tmp]*sqrtcoslat[np.newaxis,:]
+        varNan = np.isnan(var)
+        if np.sum(np.reshape(varNan,(np.size(varNan),)))==0:
+            eof1,pc1,E,u,s,v = eof(var)
+            # force the sign of PC
+            pc1  = pc1*sig*np.sign(eof1[jj].mean())
+            # force unit variance and zero mean
+            AM[:,k] = (pc1-pc1.mean())/np.std(pc1)
+    return AM
 
 ##############################################################################################
 def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3, wkdir='./'):
@@ -562,7 +619,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     OUTPUTS:
       integ- averaged data
     """
-    from numpy import trapz,cos,prod,reshape,newaxis
+    from numpy import trapz,cos,prod,reshape,newaxis,pi
     #get data into the correct shape
     tmp = AxRoll(data,axis)
     shpe= tmp.shape
