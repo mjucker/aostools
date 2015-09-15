@@ -323,7 +323,8 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
             p0          - pressure basis to compute potential temperature [hPa]
             wkdir       - root directory, from with the paths inFile and outFile are taken
         OUTPUTS:
-            psi         - residual stream function, as a function of time
+            psi         - stream function, as a function of time
+            psis        - residual stream function, as a function of time
     """
     import netCDF4 as nc
     import numpy as np
@@ -522,7 +523,8 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
     import numpy as np
     from matplotlib.mlab import find
     #
-    AM = np.zeros((len(time),len(pres)))
+    AM = np.empty((len(time),len(pres)))
+    AM[:] = np.nan
     j_tmp = find(lat > 20)
     coslat = np.cos(lat*np.pi/180.)
     negCos = (coslat < 0.)
