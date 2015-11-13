@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # Filename: climate.py
 #
-# Code by Martin Jucker, distributed under an MIT License
+# Code by Martin Jucker, distributed under an GPLv3 License
 # Any publication benefitting from this piece of code should cite
 # Jucker, M 2014. Scientific Visualisation of Atmospheric Data with ParaView.
 # Journal of Open Research Software 2(1):e4, DOI: http://dx.doi.org/10.5334/jors.al
@@ -387,6 +387,7 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
     return psi,psis
 
 
+##############################################################################################
 ## helper functions
 def update_progress(progress):
     import sys
@@ -836,6 +837,52 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
         out = AxRoll(out,axis,'i')
     #
     return out
+
+##############################################################################################
+def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=None, minPres=250):
+    """
+        INPUTS:
+        lat
+        tempIn  : temperature, shape time x pressure x lat
+        hemi  'both','N','S'
+        minLat
+        maxLat
+        pres
+        minPres
+    """
+    import numpy as np
+
+    numTimeSteps = tempIn.shape[0]
+    latN = find( (lat>= minLat)*(lat<= maxLat) )
+    latS = find( (lat<=-minLat)*(lat>=-maxLat) )
+    if pres is None:
+        temp = tempIn[:,np.newaxis,:]
+        K = 0
+    else:
+        temp = tempIn
+        K = find(pres >= minPres)
+    #
+    T = dict()
+    for H in ['S','N']:
+        T[H] = np.zeros((temp.shape[0],len(K),2))
+    for l in range(2):
+        T['S'][:,:,l] = temp[:,K,latS[1-l]]
+        T['N'][:,:,l] = temp[:,K,latN[l]]
+    #
+    dT = dict()
+    for H in ['S','N']:
+        if pres is None:
+            tmp = T[H]
+        else:
+            tmp = trapz(T[H],pres[K],axis=1)/trapz(pres[K])
+        dT[H] = tmp[:,0] - tmp[:,1]
+    if hemi == 'both':
+        return dT
+    else:
+        return dT[hemi]
+
+
+
 
 
 
