@@ -225,15 +225,19 @@ def ReadFile(fileName, show='short', mode='r'):
         
         INPUTS:
         fileName: full path to file
-        show:     how much detail to show; 'short' for one line, 'full'
+        show:     how much detail to show; 'min' for nothing, 'short' for one line, 'full'
                     for full dimensionality and attributes
         mode:     'r' for read only, 'w' for write, 'r+' for read-write
         OUTPUTS:
         file:     netCDF4 Dataset
     """
+    import os
     import netCDF4 as nc
+    if not os.path.isfile(fileName):
+        raise IOError('File '+fileName+' does not exist')
     file=nc.Dataset(fileName,mode)
-    print 'All variables:',file.variables.keys()
+    if show != 'min':
+        print 'All variables:',file.variables.keys()
     if show == 'full':
         for v in file.variables.keys():
             if v not in file.dimensions:
