@@ -853,8 +853,20 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
     import numpy as np
 
     numTimeSteps = tempIn.shape[0]
-    latN = find( (lat>= minLat)*(lat<= maxLat) )
-    latS = find( (lat<=-minLat)*(lat>=-maxLat) )
+    # get important meridional grid points
+    N = find( (lat>= minLat)*(lat<= maxLat) )
+    #  make sure first index is closer to pole
+    if lat[N[0]] < lat[N[-1]]:
+        latN = [N[0],N[-1]]
+    else:
+        latN = [N[-1],N[0]]
+    S = find( (lat<=-minLat)*(lat>=-maxLat) )
+    #  make sure first index is closer to pole
+    if lat[S[0]] > lat[S[-1]]:
+        latS = [S[0],S[-1]]
+    else:
+        latS = [S[-1],S[0]]
+    # pressure levels
     if pres is None:
         temp = tempIn[:,np.newaxis,:]
         K = 0
@@ -866,7 +878,7 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
     for H in ['S','N']:
         T[H] = np.zeros((temp.shape[0],len(K),2))
     for l in range(2):
-        T['S'][:,:,l] = temp[:,K,latS[1-l]]
+        T['S'][:,:,l] = temp[:,K,latS[l]]
         T['N'][:,:,l] = temp[:,K,latN[l]]
     #
     dT = dict()
@@ -875,6 +887,8 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
             tmp = T[H]
         else:
             tmp = trapz(T[H],pres[K],axis=1)/trapz(pres[K])
+        # zero index is closer to tropics
+        #  define bariclinicity as -dyT
         dT[H] = tmp[:,0] - tmp[:,1]
     if hemi == 'both':
         return dT
