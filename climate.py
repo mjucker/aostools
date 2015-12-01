@@ -413,6 +413,7 @@ def update_progress(progress):
 def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     """ Computes the vertical eddy components of the residual circulation,
         bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
+        Dimensions must be time x pres x lat x lon
         
         INPUTS:
             v    - meridional wind
@@ -565,9 +566,9 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
     """Computes the residual meridional wind v* (as a function of time).
         
         INPUTS:
-            data  - filename of input file, relative to wkdir, or list with (T,v,pfull)
-            temp  - name of temperature field in inFile
-            vcomp - name of meridional velocity field in inFile
+            data  - filename of input file, relative to wkdir, or dictionary with {T,v,pfull}
+            temp  - name of temperature field in data
+            vcomp - name of meridional velocity field in data
             pfull - name of pressure in inFile [hPa]
             wave  - decompose into given wave number contribution if wave>=0
             p0    - pressure basis to compute potential temperature [hPa]
@@ -593,11 +594,12 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
         update_progress(.90)
         p = inFile.variables[pfull][:]
         update_progress(1)
+        inFile.close()
         #
         v_bar,t_bar = ComputeVertEddy(v,t,p,p0,wave=wave)
     else:
-        p = data[2]
-        v_bar,t_bar = ComputeVertEddy(data[1],data[0],p,p0,wave=wave)
+        p = data[pfull]
+        v_bar,t_bar = ComputeVertEddy(data[vcomp],data[temp],p,p0,wave=wave)
     # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
@@ -606,6 +608,63 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
     return vstar
     
 
+##############################################################################################
+def ComputeWstar(data, omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=-1, p0=1e3, wkdir='./'):
+    """Computes the residual upwelling v* (as a function of time).
+    	input dimensions must be time x pres x lat x lon.
+    	output dimensions are time x pres x lat.
+        
+        INPUTS:
+            data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull)
+            omega - name of pressure velocity field in data
+            temp  - name of temperature field in data
+            vcomp - name of meridional velocity field in data
+            pfull - name of pressure in data [hPa]
+            lat   - name of latitude in data [deg]
+            wave  - decompose into given wave number contribution if wave>=0
+            p0    - pressure basis to compute potential temperature [hPa]
+            wkdir - root directory, from with the path to the input file is taken
+        OUTPUTS:
+            vstar       - residual meridional wind, as a function of time
+    """
+    import netCDF4 as nc
+    import numpy as np
+
+    a0    = 6371000.
+    
+    # read input file
+    if isinstance(data,str):
+        print 'Reading data'
+        update_progress(0)
+        #
+        inFile = nc.Dataset(wkdir + data, 'r')
+        data = {}
+        data[omega] = inFile.variables[omega][:]
+        update_progress=(.30)
+        data[temp] = inFile.variables[temp][:]
+        update_progress(.60)
+        data[vcomp] = inFile.variables[vcomp][:]
+        update_progress(.90)
+        data[pfull] = inFile.variables[pfull][:]
+        update_progress(1)
+        inFile.close()
+    # compute thickness weighted meridional heat flux
+    #  w_bar is actually v_bar, but we don't need that
+    w_bar,vt_bar = ComputeVertEddy(data[vcomp],data[temp],data[pfull],p0,wave=wave)
+    # compute zonal mean upwelling
+    w_bar = data[omega].mean(axis=-1)
+    # spherical geometry
+    pilat = data[lat]*np.pi/180.
+    coslat = np.cos(pilat)[np.newaxis,np.newaxis,:]
+    R = a0*coslat
+    R = 1./R
+    # weigh v'T' by cos\phi
+    vt_bar = vt_bar*coslat
+    # get the meridional derivative
+    dphi = np.gradient(pilat)[np.newaxis,np.newaxis,:]
+    vt_bar = np.gradient(vt_bar,1,1,dphi)[-1]
+    # put it all together
+    return w_bar + R*vt_bar
 
 ##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
@@ -636,38 +695,49 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 
 ##############################################################################################
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
-    from numpy import fft,squeeze
-    x = AxRoll(x,axis)
-    #compute anomalies
-    if do_anomaly:
-        x = GetAnomaly(x,0)
-    if len(y) > 0:
-        y = AxRoll(y,axis)
+	"""Get Fourier mode decomposition of x, or x*y
+	
+	INPUTS:
+		x          - the array to decompose
+		y          - second array if wanted
+		wave       - which mode to extract. all if -1
+		axis       - along which axis of x (and y) to decompose
+		do_anomaly - decompose from anomalies or full data
+	OUTPUTS:
+		xym        - data in Fourier space
+	"""
+	from numpy import fft,squeeze
+	x = AxRoll(x,axis)
+	#compute anomalies
+	if do_anomaly:
+		x = GetAnomaly(x,0)
+	if len(y) > 0:
+		y = AxRoll(y,axis)
         if do_anomaly:
             y = GetAnomaly(y,0)
     #Fourier decompose
-    x = fft.fft(x,axis=0)
-    if wave < 0:
-        xym = zeros_like(x)
-    if len(y) > 0:
-        y = fft.fft(y,axis=0)
+	x = fft.fft(x,axis=0)
+	if wave < 0:
+		xym = zeros_like(x)
+	if len(y) > 0:
+		y = fft.fft(y,axis=0)
         #Take out the waves - there's a magic factor of two
-        nl  = x.shape[0]**2
-        xym  = 2*real(x*y.conj())/nl
-        if wave >= 0:
-            xym = xym[wave,:][newaxis,:]
-    else:
-        mask = zeros_like(x)
-        if wave >= 0:
-            mask[wave,:] = 1
-            xym = real(fft.ifft(x*mask,axis=0))
-        else:
-            for m in range(x.shape[0]):
-                mask[m,:] = 1
-                xym[m,:] = real(fft.ifft(x*mask,axis=0)).mean(axis=0)
-                mask[m,:] = 0
-    xym = AxRoll(xym,axis,'i')
-    return squeeze(xym)
+		nl  = x.shape[0]**2
+		xym  = 2*real(x*y.conj())/nl
+		if wave >= 0:
+			xym = xym[wave,:][newaxis,:]
+	else:
+		mask = zeros_like(x)
+		if wave >= 0:
+			mask[wave,:] = 1
+			xym = real(fft.ifft(x*mask,axis=0))
+		else:
+			for m in range(x.shape[0]):
+				mask[m,:] = 1
+				xym[m,:] = real(fft.ifft(x*mask,axis=0)).mean(axis=0)
+				mask[m,:] = 0
+	xym = AxRoll(xym,axis,'i')
+	return squeeze(xym)
 
 ##helper functions
 def GetAnomaly(x,axis=-1):
@@ -724,7 +794,6 @@ def ComputeEpFluxes(lat,pres,upvp,vptp,t):
         upvp   - [u'v'], shape(time,p,lat)
         vptp   - [v'T'], shape(time,p,lat)
         t      - [T]   , shape(time,p,lat)
-        avgdiv - whether or not to average the divergences over all times
         OUTPUTS:
         ep1  - meridional EP-flux component [m2/s2]
         ep2  - vertical   EP-flux component [hPa m/s2]
