@@ -915,15 +915,22 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
 
 ##############################################################################################
 def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=None, minPres=250):
-    """
+    """Compute the meridional temperature gradient, integrated between minLat and maxLat.
+    	Thus, baroclinicity is defined as the difference in temperature between minLat and maxLat,
+    	optionally integrated from the surface to minPres.
+    	
         INPUTS:
-        lat
-        tempIn  : temperature, shape time x pressure x lat
-        hemi  'both','N','S'
-        minLat
-        maxLat
-        pres
-        minPres
+        lat     - latitude [degrees] 
+        tempIn  - temperature, shape time x pressure x lat
+        hemi    - hemisphere to consider. 'both','N','S'
+        minLat  - latitude closest to equator
+        maxLat  - latitdue closest to pole
+        pres    - pressure [hPa]
+        minPres - top of pressure averaging from surface.
+        			only used if pres is not None.
+        OUTPUT:
+        dT      - dictionary with options ['S'] and ['N'] if hemi='both'
+        			otherwise array of length len(time)
     """
     import numpy as np
 
