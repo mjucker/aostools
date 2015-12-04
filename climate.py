@@ -439,7 +439,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     v_bar = v.mean(axis=-1)
     t_bar = t.mean(axis=-1) # t_bar = theta_bar
     # prepare pressure derivative
-    dthdp = np.gradient(t_bar,1,dp,1)[1] # dthdp = d(theta_bar)/dp
+    dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
     # now get wave component(s)
     if wave < 0:
@@ -609,23 +609,24 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
     
 
 ##############################################################################################
-def ComputeWstar(data, omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=-1, p0=1e3, wkdir='./'):
+def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=[-1], p0=1e3):
     """Computes the residual upwelling v* (as a function of time).
     	input dimensions must be time x pres x lat x lon.
     	output dimensions are time x pres x lat.
         
         INPUTS:
             data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull)
+            slice - time slice to work with (large memory requirements). Array [start,stop] or 'all'
             omega - name of pressure velocity field in data
             temp  - name of temperature field in data
             vcomp - name of meridional velocity field in data
             pfull - name of pressure in data [hPa]
             lat   - name of latitude in data [deg]
-            wave  - decompose into given wave number contribution if wave>=0
+            wave  - decompose into given wave number contribution(s) if 
+            		 len(wave)=1 and wave>=0, or len(wave)>1
             p0    - pressure basis to compute potential temperature [hPa]
-            wkdir - root directory, from with the path to the input file is taken
         OUTPUTS:
-            vstar       - residual meridional wind, as a function of time
+            wstar - residual pressure velocity, as a function of time
     """
     import netCDF4 as nc
     import numpy as np
@@ -635,36 +636,41 @@ def ComputeWstar(data, omega='omega', temp='temp', vcomp='vcomp', pfull='pfull',
     # read input file
     if isinstance(data,str):
         print 'Reading data'
-        update_progress(0)
         #
-        inFile = nc.Dataset(wkdir + data, 'r')
+        #if outFile == 'same': outFile = data
+        inFile = nc.Dataset(data, 'r')
+        if slice == 'all':
+        	slice=[0,inFile.variables[omega][:].shape[0]]
         data = {}
-        data[omega] = inFile.variables[omega][:]
-        update_progress=(.30)
-        data[temp] = inFile.variables[temp][:]
-        update_progress(.60)
-        data[vcomp] = inFile.variables[vcomp][:]
-        update_progress(.90)
+        data[omega] = inFile.variables[omega][slice[0]:slice[1],:]
+        data[temp] = inFile.variables[temp][slice[0]:slice[1],:]
+        data[vcomp] = inFile.variables[vcomp][slice[0]:slice[1],:]
         data[pfull] = inFile.variables[pfull][:]
-        update_progress(1)
+        data[lat] = inFile.variables[lat][:]
         inFile.close()
-    # compute thickness weighted meridional heat flux
-    #  w_bar is actually v_bar, but we don't need that
-    w_bar,vt_bar = ComputeVertEddy(data[vcomp],data[temp],data[pfull],p0,wave=wave)
-    # compute zonal mean upwelling
-    w_bar = data[omega].mean(axis=-1)
     # spherical geometry
     pilat = data[lat]*np.pi/180.
     coslat = np.cos(pilat)[np.newaxis,np.newaxis,:]
-    R = a0*coslat
+    R = a0*coslat[np.newaxis,:]
     R = 1./R
-    # weigh v'T' by cos\phi
-    vt_bar = vt_bar*coslat
-    # get the meridional derivative
     dphi = np.gradient(pilat)[np.newaxis,np.newaxis,:]
-    vt_bar = np.gradient(vt_bar,1,1,dphi)[-1]
+    # compute thickness weighted meridional heat flux
+    shpe = data[omega].shape[:-1]
+    vt_bar = zeros((len(wave),)+shpe)
+    for w in range(len(wave)):
+    	#  w_bar is actually v_bar, but we don't need that
+    	w_bar,vt_bar[w,:] = ComputeVertEddy(data[vcomp],data[temp],data[pfull],p0,wave=wave[w])
+    	# weigh v'T' by cos\phi
+    	vt_bar[w,:] = vt_bar[w,:]*coslat
+    	# get the meridional derivative
+    	vt_bar[w,:] = np.gradient(vt_bar[w,:],1,1,dphi,edge_order=2)[-1]
+    # compute zonal mean upwelling
+    w_bar = data[omega].mean(axis=-1)[np.newaxis,:]
     # put it all together
-    return w_bar + R*vt_bar
+    if len(wave)==1:
+    	return np.squeeze(w_bar + R*vt_bar)
+    else:
+    	return w_bar + R*vt_bar
 
 ##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
@@ -963,6 +969,26 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
         return dT
     else:
         return dT[hemi]
+
+
+#######################################################
+def SymmetricColorbar(fig, obj, zero=0):
+	"""Make colorbar symmetric with respect to zero.
+		Note: this does not update the colobar limits, but adjusts
+		the colormap such that the node is around zero.
+		
+		INPUTS:
+		fig  - figure object to attach colobar to
+		obj  - color plot [e.g. obj=contourf()]
+		zero - node to assign color of 0
+	"""
+	cb = fig.colorbar(obj)
+	(cmn,cmx) = cb.get_clim()
+	cmnp = cmn-zero
+	cmxp = cmx-zero
+	c0 = min(cmnp,-cmxp) + zero
+	c1 = max(cmxp,-cmnp) + zero
+	obj.set_clim(c0,c1)
 
 
 
