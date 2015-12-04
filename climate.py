@@ -665,10 +665,10 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	# get the meridional derivative
     	vt_bar[w,:] = np.gradient(vt_bar[w,:],1,1,dphi,edge_order=2)[-1]
     # compute zonal mean upwelling
-    w_bar = data[omega].mean(axis=-1)[np.newaxis,:]
+    w_bar = data[omega].mean(axis=-1)
     # put it all together
     if len(wave)==1:
-    	return np.squeeze(w_bar),np.squeeze(R*vt_bar)
+    	return w_bar,np.squeeze(R*vt_bar)
     else:
     	return w_bar,R*vt_bar
 
