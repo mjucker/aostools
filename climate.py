@@ -668,9 +668,9 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     w_bar = data[omega].mean(axis=-1)[np.newaxis,:]
     # put it all together
     if len(wave)==1:
-    	return np.squeeze(w_bar + R*vt_bar)
+    	return np.squeeze(w_bar),np.squeeze(R*vt_bar)
     else:
-    	return w_bar + R*vt_bar
+    	return w_bar,R*vt_bar
 
 ##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
