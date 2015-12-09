@@ -698,7 +698,7 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
       div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
       div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
     """
-    from numpy import cos,tan,mat,newaxis,reshape,mat,gradient
+    from numpy import pi,cos,tan,mat,newaxis,reshape,mat,gradient
     # some constants
     R     = 287.04
     cp    = 1004
@@ -727,6 +727,7 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
     # dtdp = [theta]_p:
     theta = tbar*pp0
     dtdp  = gradient(theta,1,dp,1,edge_order=2)[1]
+    dtdp[dtdp == 0] = NaN
     # vptp = [v'theta']
     vptp = vptp*pp0  
     #
