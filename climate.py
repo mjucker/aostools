@@ -610,9 +610,10 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
 
 ##############################################################################################
 def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=[-1], p0=1e3):
-    """Computes the residual upwelling v* (as a function of time).
+    """Computes the residual upwelling w* as a function of time.
     	input dimensions must be time x pres x lat x lon.
-    	output dimensions are time x pres x lat.
+    	output is either space-time (wave<0, dimensions time x pres x lat)
+         or space-time-wave (dimensions wave x time x pres x lat).
         
         INPUTS:
             data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull)
@@ -626,7 +627,8 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
             		 len(wave)=1 and wave>=0, or len(wave)>1
             p0    - pressure basis to compute potential temperature [hPa]
         OUTPUTS:
-            wstar - residual pressure velocity, as a function of time
+            w_bar - zonal mean Eulerian pressure velocity
+            wstar - residual pressure velocity, as a function of time [and waves]
     """
     import netCDF4 as nc
     import numpy as np
