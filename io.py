@@ -101,6 +101,9 @@ def CheckDimension(file,dimName,dimVal):
 #
 def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimNames=['x','y','z','time']):
     """Write netCDF file that is compatible with pv_atmos.
+
+        Note that due to differences bewteen python and netCDF dimensions,
+        data.shape = (len(t),len(z),len(y),len(x))
         
         Takes one variable, and stores it inside a generic netCDF file.
         If the file already exists, adds the variable to the file.
