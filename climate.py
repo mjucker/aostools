@@ -671,6 +671,91 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	return w_bar,np.squeeze(R*vt_bar)
     else:
     	return w_bar,R*vt_bar
+##############################################################################################
+def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
+    """ Compute the EP-flux vectors and divergence terms.
+
+        The vectors are normalized to be plotted in cartesian (linear)
+        coordinates, i.e. do not include the geometric factor a*cos\phi.
+        Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
+        The divergence is in units of m/s/day, and therefore represents
+        the deceleration of the zonal wind. This is actually the quantity
+        1/(acos\phi)*div(F).
+
+    INPUTS:
+      lat    - latitude [degrees]
+      pres   - pressure [hPa]
+      upvp   - [u'v'], shape(time,p,lat)
+      vptp   - [v'T'], shape(time,p,lat)
+      tbar   - [T]   , shape(time,p,lat)
+      ubar   - [u]   , optional, shape(time,p,lat)
+      upwp   - [u'w'], optional, shape(time,p,lat)
+    OUTPUTS:
+      ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
+      ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
+      div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
+      div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
+    """
+    from numpy import cos,tan,mat,newaxis,reshape,mat,gradient
+    # some constants
+    R     = 287.04
+    cp    = 1004
+    kappa = R/cp
+    p0    = 1000
+    Omega = 2*pi/(24*3600)
+    a0    = 6.378e6
+    # geometry
+    pilat = lat*pi/180
+    dphi  = gradient(pilat)[newaxis,newaxis,:]
+    coslat= cos(pilat)[newaxis,newaxis,:]
+    sinlat= sin(pilat)[newaxis,newaxis,:]
+    tanlat= tan(pilat)[newaxis,newaxis,:]
+    f     = 2*Omega*sinlat
+    pp0  = (p0/pres[newaxis,:,newaxis])**kappa
+    dp    = gradient(pres)[newaxis,:,newaxis]
+    #
+    # absolute vorticity
+    if ubar is None:
+        fhat = 0.
+    else:
+        fhat = gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]/coslat/a0
+    fhat = f - fhat
+    #
+    ## compute thickness weighted heat flux
+    # dtdp = [theta]_p:
+    theta = tbar*pp0
+    dtdp  = gradient(theta,1,dp,1,edge_order=2)[1]
+    # vptp = [v'theta']
+    vptp = vptp*pp0  
+    #
+    ## compute the horizontal component
+    if ubar is None:
+        shear = 0.
+    else:
+        shear = gradient(ubar,1,dp,1,edge_order=2)[1]
+    ep1_cart = -upvp + shear*vptp/dtdp
+    #
+    ## compute vertical component of EP flux.
+    ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
+    #
+    ep2_cart = fhat*vptp/dtdp
+    if upwp is not None:
+        ep2_cart -= upwp
+    #
+    #
+    #
+    # div1 = 1/a0 d/d phi [-u'v'] - 2/a0 tan(phi)[-u'v']
+    # div2 = d/dp (f[v'theta']/[theta]_p)
+    div1 = gradient(ep1_cart,1,1,dphi,edge_order=2)[-1] - 2*tanlat*ep1_cart
+    div1 = div1/a0
+    #
+    div2 = gradient(ep2_cart,1,dp,1,edge_order=2)[1]
+    #
+    # convert to m/s/day
+    div1 = div1*86400
+    div2 = div2*86400
+    #
+    return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
@@ -765,6 +850,9 @@ def GetAnomaly(x,axis=-1):
     return x
 #
 def AxRoll(x,ax,start_mode=0):
+    """Re-arrange array x so that axis 'ax' is first dimension.
+        Undo this if start_mode=='i'
+    """
     from numpy import rollaxis
     if isinstance(start_mode, basestring):
         mode = start_mode
@@ -783,78 +871,6 @@ def AxRoll(x,ax,start_mode=0):
     else:
         raise Exception("mode must be 'f' for forward or 'i' for inverse")
     return y
-
-
-#######################################################
-def ComputeEpFluxes(lat,pres,upvp,vptp,t):
-    """ Compute the EP-flux vectors and divergence terms.
-        
-        The vectors are normalized to be plotted in cartesian (linear)
-        coordinates from -90 to 90 degrees and from 1000-0hPa
-        The divergence is in units of m/s/day, and therefore represents
-        the deceleration of the zonal wind.
-        
-        INPUTS:
-        lat    - latitude [degrees]
-        pres   - pressure [hPa]
-        upvp   - [u'v'], shape(time,p,lat)
-        vptp   - [v'T'], shape(time,p,lat)
-        t      - [T]   , shape(time,p,lat)
-        OUTPUTS:
-        ep1  - meridional EP-flux component [m2/s2]
-        ep2  - vertical   EP-flux component [hPa m/s2]
-        div1 - horizontal EP-flux divergence [m/s/day]
-        div2 - horizontal EP-flux divergence [m/s/day]
-        """
-    from numpy import cos,tan,mat,newaxis,reshape,mat,gradient
-    # some constants
-    R     = 287.04
-    cp    = 1004
-    kappa = R/cp
-    p0    = 1000
-    Omega = 2*pi/(24*3600)
-    a0    = 6.378e6
-    f     = 2*Omega*sin(lat*pi/180)
-    #
-    #
-    ## compute vertical component of EP flux.
-    #
-    # vptp = [v'theta']
-    pp0  = (p0/pres[newaxis,:,newaxis])**kappa
-    vptp = vptp*pp0
-    #
-    # dtdp = [theta]_p:
-    # using the gradient function
-    dp   = gradient(pres)[newaxis,:,newaxis]*100
-    dtdp = gradient(theta,1,dp,1)[1]
-    dtdp = sum(dtdp==0)/prod(dtdp.shape)
-    dtdp[dtdp==0] = NaN
-    #
-    # ep2 = f [v'theta'] / [theta]_p, units of hPa.m/s2
-    ep2 = f[newaxis,newaxis,:]*vptp/dtdp
-    #
-    ## compute the horizontal component, units of m.m/s2
-    ep1 = -upvp
-    #
-    ## compute divergence
-    #
-    # div1 = 1/a0 d/d phi [-u'v'] + 2/a0 tan(phi)[-u'v'], units of m/s2
-    # div2 = f d/dp ([v'theta']/[theta]_p), units of m/s2
-    # note: usually, div1 and div2 are multiplied by a*cos(phi), with m2/s2.
-    # physically, this does not make much sense, and the factor a*cos(phi) is
-    # divided out again when computing v*.
-    tanlat=tan(lat*pi/180)[newaxis,:]
-    div1 = zeros_like(ep1)
-    div2 = zeros_like(div1)
-    dphi = gradient(lat*pi/180)[newaxis,newaxis,:]
-    grad_ep1 = gradient(ep1,1,1 ,dphi)[2]
-    div1[t,:] = 1/a0*grad_ep1 + 2/a0*tanlat*ep1
-    div2[t,:] = gradient(ep2,1,dp,1   )[1]
-    # change to m/s/day
-    div1 = div1*86400
-    div2 = div2*86400
-    #
-    return squeeze(ep1),squeeze(ep2),squeeze(div1),squeeze(div2)
 
 
 #######################################################
