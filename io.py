@@ -99,7 +99,7 @@ def CheckDimension(file,dimName,dimVal):
 
 ## create a generic netCDF file that can be read with pv_atmos
 #
-def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimNames=['x','y','z','time'],unlimTime=True,timeUnits='days since 0001-01-01 00:00:00'):
+def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimNames=['x','y','z','time'],unlimTime=True,timeUnits='days since 0001-01-01 00:00:00',calendar=None):
     """Write netCDF file that is compatible with pv_atmos.
 
         Note that due to differences bewteen python and netCDF dimensions,
@@ -115,6 +115,8 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
         outFileName - name of (new) netCDF file. If exists already, variable is added.
         dimNames    - names of the output dimensions
         unlimTime   - whether time dimension should be unlimited/appendable
+        timeUnits   - units of time dimension
+        calendar    - calendar of time dimension
         NOTE: if outFileName already exists, the dimensions in the file have to
         correspond to the dimensions given as inputs.
         """
@@ -178,6 +180,8 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
             tV.setncattr('long_name','time')
             tV.setncattr('cartesian_axis','T')
             tV.setncattr('units',timeUnits)
+            if calendar:
+                tV.setncattr('calendar',calendar)
         dims = (checkDim,) + dims
     vOut = outFile.createVariable(varName,'f4',dims)
     vOut[:] = data
