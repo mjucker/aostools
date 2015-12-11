@@ -25,7 +25,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
         
         Inputs:
         file        file name, relative path from wkdir
-        climatType  'daily', 'monthly', 'DJF', 'JJA', 'annual', or any
+        climatType  'daily', 'monthly', 'DJF', 'JJA', or any
                     combination of months according to two-letter code
                     Ja Fe Ma Ap My Jn Jl Au Se Oc No De
         wkdir       working directory, in with 'file' must be, and to which the output
@@ -41,7 +41,6 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     import netCDF4 as nc
     import numpy as np
 
-    TimeStepRange = 1.01
     if climatType == 'DJF':
         climType = 'DeJaFe'
     elif climatType == 'JJA':
@@ -51,101 +50,75 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     else:
         climType = climatType
     monthList=['Ja','Fe','Ma','Ap','My','Jn','Jl','Au','Se','Oc','No','De']
+    calendar_types = ['standard', 'gregorian', 'proleptic_gregorian' 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
 
 
-    # Now, let's go and read that file. Also, find out how many time steps we have
+    ncFile = nc.Dataset(wkdir+file,'r+')
 
-    ncFile = nc.Dataset(wkdir+file,'r')
-
-    numTimeSteps = len(ncFile.dimensions[timeDim])
-
-
-    # Now, find out about the units and thus the time step interval in units of days
-
+    time    = ncFile.variables[timeDim][:]
+    numTimeSteps = len(time)
     timeVar = ncFile.variables[timeDim]
+    # check the time units
     timeUnits = timeVar.units
     chck = CheckAny(('seconds','days','months'),timeUnits)
     if not chck:
         print 'Cannot understand units of time, which is: '+timeUnits
-        timeUnits = raw_input('Please provide units [seconds,days,months] ')
-    if 'seconds' in timeUnits:
-        timeStepFact = 1./86400
-        timeUnits = 'seconds'
-    elif 'days' in timeUnits:
-        timeStepFact = 1
-        timeUnits = 'days'
-    elif 'months' in timeUnits:
-        timeStepFact = 30
-        timeUnits = 'months'
-    else:
-        raise Exception("I don't understand the time unit: "+timeVar.units)
-    if np.diff(timeVar).max()/np.diff(timeVar).min() > TimeStepRange:
-        raise Exception("The time step is not constant, but varies between "+str(diff(timeVar).min())+" and "+str(diff(timeVar).max()))
-    timeStep = np.diff(timeVar).mean()*timeStepFact
+        newUnits = raw_input('Please provide units [seconds,days,months] ')
+        if newUnits not in ["seconds","days","months"]:
+            raise ValueError('units must be seconds, days, or months')
+        unitSplit = newUnits.split()
+        unitSplit[0] = newUnits
+        timeUnits = ' '.join(unitSplit)
+    timeStep = np.diff(timeVar).mean()
     print 'The time dimension is in units of',timeUnits,', with a time step of',timeStep,'days'
+    # check the calendar type
+    getCal = False
+    try:
+        timeCal = timeVar.calendar
+        if timeCal not in calendar_types:
+            print 'Cannot understand the calendar type, which is: '+timeCal
+            timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+    except:
+        timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+        timeVar.setncattr('calendar',timeCal)
+    print 'The calendar type is assumed to be '+timeCal
+    if timeCal not in calendar_types:
+        raise ValueError('calender must be in '+str(calendar_types))
 
-
-    # Now, make an educated guess about the length of the year in units of days.
-    # At the moment, we can't deal with leap years.
-
-    totalNumDays = ( timeVar[-1] - timeVar[0] ) * timeStepFact + timeStep
-    if totalNumDays % 360 == 0:
-        daysPerYear = 360
-        daysPerMonths = 30*np.ones(12,)
-    elif totalNumDays % 365 == 0:
-        daysPerYear = 365
-        daysPerMonths = [31,28,31,30,31,30,31,31,30,31,30,31]
-    else:
-        raise Exception("File "+wkdir+file+": Cannot deal with years that are not 360 or 365 days. This data has "+str(totalNumDays)+" days.")
-    stepsPerYear  = daysPerYear/timeStep
-    totalNumYears = totalNumDays/daysPerYear
-    print 'The simulation is',totalNumDays,'days long, which I assume means',totalNumYears,'years of',daysPerYear,'days.'
-
+    # split the time steps into days, months, and years
+    date = nc.num2date(time,timeUnits,timeCal)
+    days = np.zeros(len(date),)
+    monthsI = np.zeros_like(days)
+    monthsS = []
+    years  = np.zeros_like(days)
+    for d in range(len(date)):
+        days[d] = date[d].day
+        monthsI[d] = date[d].month
+        monthsS.append(monthList[date[d].month-1])
+        years[d] = date[d].year
+    nMonths = len(np.unique(monthsI))
+    daysPerMonth = np.zeros(nMonths,)
+    for m in range(nMonths):
+        daysThisMonth = days[monthsI==m+1]
+        daysPerMonth[m] = daysThisMonth.max()
+    dayOfYear = np.zeros_like(days)
+    for d in range(len(date)):
+        dayOfYear[d] = days[d] + np.sum(daysPerMonth[:monthsI[d]-1])
 
     # Now, need to know about the type of climatology we want.
     # 
-    # climStep gives the number of time steps to include per climatology interval
-    # 
-    # climInts gives the indicies for each climatology interval
-
-    # In[ ]:
-
-    if   climType == 'daily':
-        climStep = max(1,1/timeStep)
-        climInts = climStep*np.ones(daysPerYear/max(1,timeStep),)
+    if climType == 'daily':
+        climTimeDim = np.arange(np.sum(daysPerMonth))
+        climTimeVar = dayOfYear-1
     elif climType == 'monthly':
-        climInts = daysPerMonths/timeStep
+        climTimeDim = np.sort(np.unique(monthsI)) - 1
+        climTimeVar = monthsI - 1
     else:
-        climInts = []
-        monthEnds=np.cumsum(daysPerMonths)
-        for m in range(len(monthList)):
-            indx = (monthEnds[m]-monthEnds[m-1])%daysPerYear/timeStep
-            if monthList[m] in climType:
-                climInts.append(indx)
-            else:
-                climInts.append(-indx)
-
-
-    # climInts is the important output here, as it knows for each year, which time steps will have to be averaged over
-    # 
-    # This is then put into includeSteps, which indicates which time steps one has to average over, considering the entire data set
-
-    if climType == 'daily' or climType == 'monthly':
-        includeSteps = np.zeros((stepsPerYear,len(climInts)))
-        indx=0;m=0
-        for n in climInts:
-            includeSteps[indx:indx+n,m]=1
-            indx = indx+n
-            m += 1
-    else:
-        includeSteps = np.zeros(stepsPerYear,)
-        indx=0
-        for n in climInts:
-            if n > 0:
-                includeSteps[indx:indx+n]=1
-            indx = indx+abs(n)
-    includeSteps = np.array(list(includeSteps)*totalNumYears)
-
+        climTimeVar = np.zeros_like(days)
+        for m in range(len(climType)/2):
+            thisMonth = climType[m*2:m*2+2]
+            indices = [i for i, x in enumerate(monthsS) if x == thisMonth]
+            climTimeVar[indices] = 1
 
     # Create the output file, including dimensions.
     # 
@@ -164,21 +137,22 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
             outVar = outFile.createVariable(dim,str(ncFile.variables[dim].dtype),(dim,))
             outVar[:] = inVar[:]
             for att in inVar.ncattrs():
-                outVar.setncattr(att,inVar.getncattr(att))
+                if not 'edges' in att:
+                    outVar.setncattr(att,inVar.getncattr(att))
         elif climType == 'daily' or climType == 'monthly':
-            nTime = np.shape(includeSteps)[1]
+            nTime = len(climTimeDim)
             if climType == 'daily':
                 units = 'days'
-                dTime = (np.arange(nTime) + 1)*max(1,timeStep)
             else:
                 units = 'months'
-                dTime = np.arange(nTime) + 1
+            dTime = climTimeDim 
             outDim = outFile.createDimension(dim,nTime)
             timeValue = dTime
             outVar = outFile.createVariable(dim,str(ncFile.variables[dim].dtype),(dim,))
             outVar[:] = timeValue
             outVar.setncattr('long_name','climatological ' + units[:-1] + ' of year')
             outVar.setncattr('units',units + ' since 0001-01-01 00:00:00')
+            outVar.setncattr('calendar',timeCal)
             outVar.setncattr('cartesian_axis','T')
             outVar.setncattr('bounds','time_bounds')
 
@@ -196,7 +170,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
             tmpVar = ncFile.variables[var][:]
             if climType != 'daily' and climType != 'monthly':
                 outVar = outFile.createVariable(var,str(ncFile.variables[var].dtype),ncFile.variables[var].dimensions[1:])
-                tmpAvg = tmpVar[includeSteps>0,:].mean(axis=0)
+                tmpAvg = tmpVar[climTimeVar>0,:].mean(axis=0)
             else:
                 outVar = outFile.createVariable(var,str(ncFile.variables[var].dtype),ncFile.variables[var].dimensions    )
                 avgShape = []
@@ -205,7 +179,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
                     avgShape.append(np.shape(outVar)[t+1])
                 tmpAvg = np.zeros(avgShape)
                 for t in range(nTime):
-                    tmpAvg[t,:] = tmpVar[includeSteps[:,t]>0,:].mean(axis=0)
+                    includeSteps = climTimeVar == climTimeDim[t]
+                    tmpAvg[t,:] = tmpVar[includeSteps,:].mean(axis=0)
             #package average
             if 'add_offset' in ncFile.variables[var].ncattrs():
                 tmpAvg = tmpAvg - ncFile.variables[var].getncattr('add_offset')
