@@ -18,7 +18,7 @@ def CheckAny(set,string):
         if c in string: return 1
     return 0
 
-def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
+def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     """Compute climatologies from netCDF files.
         
         ComputeClimate(file,climatType,wkdir='/',timeDim='time')
@@ -31,6 +31,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
         wkdir       working directory, in with 'file' must be, and to which the output
                     is written
         timeDim     name of the time dimension in the netcdf file
+        cal         calendar, if other than within the netcdf file
         Outputs:
         outFile     name of the output file created
         writes outputfile with name depending on input file name and climatType
@@ -73,19 +74,31 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
     print 'The time dimension is in units of',timeUnits,', with a time step of',timeStep,'days'
     # check the calendar type
     getCal = False
-    try:
-        timeCal = timeVar.calendar
-        if timeCal not in calendar_types:
-            print 'Cannot understand the calendar type, which is: '+timeCal
+    if cal:
+        timeCal = cal
+    else:
+        try:
+            timeCal = timeVar.calendar
+            if timeCal not in calendar_types:
+                print 'Cannot understand the calendar type, which is: '+timeCal
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
-    except:
-        timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
-        timeVar.setncattr('calendar',timeCal)
-    print 'The calendar type is assumed to be '+timeCal
+        except:
+            timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+            timeVar.setncattr('calendar',timeCal)
+            print 'The calendar type is assumed to be '+timeCal
     if timeCal not in calendar_types:
         raise ValueError('calender must be in '+str(calendar_types))
-
-    # split the time steps into days, months, and years
+    #
+    def FindDayOfYear(dateStruc,dateUnits,calendar):
+        import netcdftime as nct
+        nDays = len(dateStruc)
+        t = nct.utime(dateUnits,calendar=calendar)
+        dateLoc = np.zeros_like(dateStruc)
+        for d in range(nDays):
+            dateLoc[d] = nct.datetime(1,dateStruc[d].month,dateStruc[d].day)
+        dayOfYear = t.date2num(dateLoc)
+        return dayOfYear
+    # split everything into years,months,days
     date = nc.num2date(time,timeUnits,timeCal)
     days = np.zeros(len(date),)
     monthsI = np.zeros_like(days)
@@ -96,20 +109,12 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time'):
         monthsI[d] = date[d].month
         monthsS.append(monthList[date[d].month-1])
         years[d] = date[d].year
-    nMonths = len(np.unique(monthsI))
-    daysPerMonth = np.zeros(nMonths,)
-    for m in range(nMonths):
-        daysThisMonth = days[monthsI==m+1]
-        daysPerMonth[m] = daysThisMonth.max()
-    dayOfYear = np.zeros_like(days)
-    for d in range(len(date)):
-        dayOfYear[d] = days[d] + np.sum(daysPerMonth[:monthsI[d]-1])
-
     # Now, need to know about the type of climatology we want.
     # 
     if climType == 'daily':
-        climTimeDim = np.arange(np.sum(daysPerMonth))
-        climTimeVar = dayOfYear-1
+        dayOfYear = FindDayOfYear(date,timeUnits,timeCal)
+        climTimeDim = np.sort(np.unique(dayOfYear))
+        climTimeVar = dayOfYear
     elif climType == 'monthly':
         climTimeDim = np.sort(np.unique(monthsI)) - 1
         climTimeVar = monthsI - 1
