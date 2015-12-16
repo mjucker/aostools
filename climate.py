@@ -393,7 +393,8 @@ def update_progress(progress):
 def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     """ Computes the vertical eddy components of the residual circulation,
         bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
-        Dimensions must be time x pres x lat x lon
+        Dimensions must be time x pres x lat x lon.
+        Output dimensions are: [v_bar] = [v], [t_bar] = [v*p]
         
         INPUTS:
             v    - meridional wind
@@ -402,8 +403,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
             p0   - reference pressure for potential temperature
             wave - wave number (if >=0)
         OUPUTS:
-            v_bar - zonal mean meridional wind
-            t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p>
+            v_bar - zonal mean meridional wind [v]
+            t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
     """
     import numpy as np
     #
@@ -412,7 +413,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     #
     # pressure quantitites, p in hPa
     pp0 = (p0/p[np.newaxis,:,np.newaxis,np.newaxis])**kappa
-    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
+    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]
     # convert to potential temperature
     t = t*pp0 # t = theta
     # zonal means
@@ -582,8 +583,8 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
         v_bar,t_bar = ComputeVertEddy(data[vcomp],data[temp],p,p0,wave=wave)
     # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
-    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
-    vstar = v_bar - np.gradient(t_bar,1,dp,1)[1]
+    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]
+    vstar = v_bar - np.gradient(t_bar,1,dp,1,edge_order=2)[1]
 
     return vstar
     
@@ -594,9 +595,11 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	input dimensions must be time x pres x lat x lon.
     	output is either space-time (wave<0, dimensions time x pres x lat)
          or space-time-wave (dimensions wave x time x pres x lat).
+        Output units are [w_bar] = [omega], [R*vt_bar] = [vcomp*pfull/m], i.e.
+         if [omega] = Pa/s and [pfull]=hPa, w* = wbar/100*+R*vt_bar [hPa/s]
         
         INPUTS:
-            data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull)
+            data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull,lat)
             slice - time slice to work with (large memory requirements). Array [start,stop] or 'all'
             omega - name of pressure velocity field in data
             temp  - name of temperature field in data
@@ -607,8 +610,8 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
             		 len(wave)=1 and wave>=0, or len(wave)>1
             p0    - pressure basis to compute potential temperature [hPa]
         OUTPUTS:
-            w_bar - zonal mean Eulerian pressure velocity
-            wstar - residual pressure velocity, as a function of time [and waves]
+            w_bar    - zonal mean Eulerian pressure velocity
+            R*vt_bar - eddy contribution to residual pressure velocity, as a function of time [and waves]
     """
     import netCDF4 as nc
     import numpy as np
@@ -667,11 +670,11 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
     INPUTS:
       lat    - latitude [degrees]
       pres   - pressure [hPa]
-      upvp   - [u'v'], shape(time,p,lat)
-      vptp   - [v'T'], shape(time,p,lat)
-      tbar   - [T]   , shape(time,p,lat)
-      ubar   - [u]   , optional, shape(time,p,lat)
-      upwp   - [u'w'], optional, shape(time,p,lat)
+      upvp   - [u'v'], shape(time,p,lat) [m2/s2]
+      vptp   - [v'T'], shape(time,p,lat) [m.K/s]
+      tbar   - [T]   , shape(time,p,lat) [K]
+      ubar   - [u]   , optional, shape(time,p,lat) [m/s]
+      upwp   - [u'w'], optional, shape(time,p,lat) [m.hPa/s2]
     OUTPUTS:
       ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
       ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -684,7 +687,7 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
     cp    = 1004
     kappa = R/cp
     p0    = 1000
-    Omega = 2*pi/(24*3600)
+    Omega = 2*pi/(24*3600.)
     a0    = 6.378e6
     # geometry
     pilat = lat*pi/180
@@ -701,38 +704,38 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
         fhat = 0.
     else:
         fhat = gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]/coslat/a0
-    fhat = f - fhat
+    fhat = f - fhat # [1/s]
     #
     ## compute thickness weighted heat flux
     # dtdp = [theta]_p:
     theta = tbar*pp0
-    dtdp  = gradient(theta,1,dp,1,edge_order=2)[1]
+    dtdp  = gradient(theta,1,dp,1,edge_order=2)[1] # [K/hPa]
     dtdp[dtdp == 0] = NaN
     # vptp = [v'theta']
-    vptp = vptp*pp0  
+    vptp = vptp*pp0  # [m.K/s]
     #
     ## compute the horizontal component
     if ubar is None:
         shear = 0.
     else:
-        shear = gradient(ubar,1,dp,1,edge_order=2)[1]
-    ep1_cart = -upvp + shear*vptp/dtdp
+        shear = gradient(ubar,1,dp,1,edge_order=2)[1] # [m/s.hPa]
+    ep1_cart = -upvp + shear*vptp/dtdp # [m2/s2 + m/s/hPa*m*K/s*hPa/K] = [m2/s2]
     #
     ## compute vertical component of EP flux.
     ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
     #
-    ep2_cart = fhat*vptp/dtdp
+    ep2_cart = fhat*vptp/dtdp # [1/s*m*K/s*hPa/K] = [m.hPa/s2]
     if upwp is not None:
-        ep2_cart -= upwp
+        ep2_cart -= upwp # [m.hPa/s2]
     #
     #
     #
     # div1 = 1/a0 d/d phi [-u'v'] - 2/a0 tan(phi)[-u'v']
     # div2 = d/dp (f[v'theta']/[theta]_p)
     div1 = gradient(ep1_cart,1,1,dphi,edge_order=2)[-1] - 2*tanlat*ep1_cart
-    div1 = div1/a0
+    div1 = div1/a0 # [m/s2]
     #
-    div2 = gradient(ep2_cart,1,dp,1,edge_order=2)[1]
+    div2 = gradient(ep2_cart,1,dp,1,edge_order=2)[1] # [m/s2]
     #
     # convert to m/s/day
     div1 = div1*86400
@@ -787,17 +790,17 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 		x = GetAnomaly(x,0)
 	if len(y) > 0:
 		y = AxRoll(y,axis)
-        if do_anomaly:
-            y = GetAnomaly(y,0)
+                if do_anomaly:
+                    y = GetAnomaly(y,0)
     #Fourier decompose
 	x = fft.fft(x,axis=0)
 	if wave < 0:
 		xym = zeros_like(x)
 	if len(y) > 0:
 		y = fft.fft(y,axis=0)
-        #Take out the waves - there's a magic factor of two
+        #Take out the waves
 		nl  = x.shape[0]**2
-		xym  = 2*real(x*y.conj())/nl
+		xym  = real(x*y.conj())/nl
 		if wave >= 0:
 			xym = xym[wave,:][newaxis,:]
 	else:
