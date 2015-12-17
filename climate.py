@@ -610,8 +610,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
             		 len(wave)=1 and wave>=0, or len(wave)>1
             p0    - pressure basis to compute potential temperature [hPa]
         OUTPUTS:
-            w_bar    - zonal mean Eulerian pressure velocity
-            R*vt_bar - eddy contribution to residual pressure velocity, as a function of time [and waves]
+            residual pressure velocity, time x pfull x lat [and waves] [hPa/s]
     """
     import netCDF4 as nc
     import numpy as np
@@ -627,10 +626,10 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
         if slice == 'all':
         	slice=[0,inFile.variables[omega][:].shape[0]]
         data = {}
-        data[omega] = inFile.variables[omega][slice[0]:slice[1],:]
+        data[omega] = inFile.variables[omega][slice[0]:slice[1],:]*0.01 # [hPa/s]
         data[temp] = inFile.variables[temp][slice[0]:slice[1],:]
         data[vcomp] = inFile.variables[vcomp][slice[0]:slice[1],:]
-        data[pfull] = inFile.variables[pfull][:]
+        data[pfull] = inFile.variables[pfull][:] # [hPa]
         data[lat] = inFile.variables[lat][:]
         inFile.close()
     # spherical geometry
@@ -653,11 +652,11 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     w_bar = data[omega].mean(axis=-1)
     # put it all together
     if len(wave)==1:
-    	return w_bar,np.squeeze(R*vt_bar)
+    	return w_bar + np.squeeze(R*vt_bar)
     else:
-    	return w_bar,R*vt_bar
+    	return w_bar + R*vt_bar
 ##############################################################################################
-def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
+def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     """ Compute the EP-flux vectors and divergence terms.
 
         The vectors are normalized to be plotted in cartesian (linear)
@@ -668,13 +667,14 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
         1/(acos\phi)*div(F).
 
     INPUTS:
-      lat    - latitude [degrees]
-      pres   - pressure [hPa]
-      upvp   - [u'v'], shape(time,p,lat) [m2/s2]
-      vptp   - [v'T'], shape(time,p,lat) [m.K/s]
-      tbar   - [T]   , shape(time,p,lat) [K]
-      ubar   - [u]   , optional, shape(time,p,lat) [m/s]
-      upwp   - [u'w'], optional, shape(time,p,lat) [m.hPa/s2]
+      lat  - latitude [degrees]
+      pres - pressure [hPa]
+      u    - zonal wind, shape(time,p,lat,lon) [m/s]
+      v    - meridional wind, shape(time,p,lat,lon) [m/s]
+      t    - temperature, shape(time,p,lat,lon) [K]
+      w    - pressure velocity, optional, shape(time,p,lat,lon) [hPa/s]
+      do_ubar - compute shear and vorticity correction? optional
+      wave - only include this wave number. all if <0. optional
     OUTPUTS:
       ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
       ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -683,58 +683,72 @@ def ComputeEPfluxDiv(lat,pres,upvp,vptp,tbar,ubar=None,upwp=None):
     """
     from numpy import pi,cos,tan,mat,newaxis,reshape,mat,gradient
     # some constants
-    R     = 287.04
+    Rd    = 287.04
     cp    = 1004
-    kappa = R/cp
+    kappa = Rd/cp
     p0    = 1000
-    Omega = 2*pi/(24*3600.)
+    Omega = 2*pi/(24*3600.) # [1/s]
     a0    = 6.378e6
     # geometry
     pilat = lat*pi/180
     dphi  = gradient(pilat)[newaxis,newaxis,:]
     coslat= cos(pilat)[newaxis,newaxis,:]
     sinlat= sin(pilat)[newaxis,newaxis,:]
-    tanlat= tan(pilat)[newaxis,newaxis,:]
+    R     = 1./(a0*coslat)
     f     = 2*Omega*sinlat
     pp0  = (p0/pres[newaxis,:,newaxis])**kappa
     dp    = gradient(pres)[newaxis,:,newaxis]
     #
     # absolute vorticity
-    if ubar is None:
-        fhat = 0.
+    if do_ubar:
+        ubar = u.mean(axis=-1)
+        fhat = R*gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]
     else:
-        fhat = gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]/coslat/a0
+        fhat = 0.
     fhat = f - fhat # [1/s]
     #
-    ## compute thickness weighted heat flux
-    # dtdp = [theta]_p:
-    theta = tbar*pp0
-    dtdp  = gradient(theta,1,dp,1,edge_order=2)[1] # [K/hPa]
-    dtdp[dtdp == 0] = NaN
-    # vptp = [v'theta']
-    vptp = vptp*pp0  # [m.K/s]
+    ## compute thickness weighted heat flux [m.hPa/s]
+    vbar,vertEddy = ComputeVertEddy(v,t,pres,p0,wave) # vertEddy = bar(v'Th'/(dTh_bar/dp))
+    #
+    ## get zonal anomalies
+    u = GetAnomaly(u)
+    v = GetAnomaly(v)
+    if wave<0:
+        upvp = (u*v).mean(axis=-1)
+    else:
+        upvp = GetWaves(u,v,wave=wave)
     #
     ## compute the horizontal component
-    if ubar is None:
-        shear = 0.
-    else:
+    if do_ubar:
         shear = gradient(ubar,1,dp,1,edge_order=2)[1] # [m/s.hPa]
-    ep1_cart = -upvp + shear*vptp/dtdp # [m2/s2 + m/s/hPa*m*K/s*hPa/K] = [m2/s2]
+    else:
+        shear = 0.
+    ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
     #
     ## compute vertical component of EP flux.
     ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
     #
-    ep2_cart = fhat*vptp/dtdp # [1/s*m*K/s*hPa/K] = [m.hPa/s2]
-    if upwp is not None:
-        ep2_cart -= upwp # [m.hPa/s2]
+    ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
+    if w is not None:
+        w = GetAnomaly(w) # w = w' [hPa/s]
+        if wave<0:
+            w = (w*u).mean(axis=-1) # w = bar(u'w') [m.hPa/s2]
+        else:
+            w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
+        ep2_cart = ep2_cart - w # [m.hPa/s2]
     #
     #
+    # We now have to make sure we get the geometric terms right
+    # With our definition, 
+    #  div1 = 1/(a.cosphi)*d/dphi[a*cosphi*ep1_cart*cosphi],
+    #    where a*cosphi comes from using cartesian, and cosphi from the derivative
+    # With some algebra, we get
+    #  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
+    div1 = coslat*gradient(ep1_cart,1,1,dphi,edge_order=2)[-1] - 2*sinlat*ep1_cart
+    # Now, we want acceleration, which is div(F)/a.cosphi [m/s2]
+    div1 = R*div1 # [m/s2]
     #
-    # div1 = 1/a0 d/d phi [-u'v'] - 2/a0 tan(phi)[-u'v']
-    # div2 = d/dp (f[v'theta']/[theta]_p)
-    div1 = gradient(ep1_cart,1,1,dphi,edge_order=2)[-1] - 2*tanlat*ep1_cart
-    div1 = div1/a0 # [m/s2]
-    #
+    # Similarly, we want acceleration = 1/a.coshpi*a.cosphi*d/dp[ep2_cart] [m/s2]
     div2 = gradient(ep2_cart,1,dp,1,edge_order=2)[1] # [m/s2]
     #
     # convert to m/s/day
@@ -772,12 +786,14 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 
 ##############################################################################################
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
-	"""Get Fourier mode decomposition of x, or x*y
+	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
+          
+        If y=[] and wave=-1, returns the mean for wave-0 and cosine amplitudes for all other waves 
 	
 	INPUTS:
 		x          - the array to decompose
 		y          - second array if wanted
-		wave       - which mode to extract. all if -1
+		wave       - which mode to extract. all if <0
 		axis       - along which axis of x (and y) to decompose
 		do_anomaly - decompose from anomalies or full data
 	OUTPUTS:
@@ -787,33 +803,36 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	x = AxRoll(x,axis)
 	#compute anomalies
 	if do_anomaly:
-		x = GetAnomaly(x,0)
-	if len(y) > 0:
-		y = AxRoll(y,axis)
-                if do_anomaly:
-                    y = GetAnomaly(y,0)
+            x = GetAnomaly(x,0)
+        if len(y) > 0:
+            y = AxRoll(y,axis)
+            if do_anomaly:
+                y = GetAnomaly(y,0)
     #Fourier decompose
 	x = fft.fft(x,axis=0)
+        nmodes = x.shape[0]/2+1
 	if wave < 0:
-		xym = zeros_like(x)
+            xym = zeros((nmodes,)+x.shape[1:])
 	if len(y) > 0:
-		y = fft.fft(y,axis=0)
-        #Take out the waves
-		nl  = x.shape[0]**2
-		xym  = real(x*y.conj())/nl
-		if wave >= 0:
-			xym = xym[wave,:][newaxis,:]
+            y = fft.fft(y,axis=0)
+            #Take out the waves - 
+            nl  = x.shape[0]**2
+            xym  = (real(x*y.conj())/nl)[:nmodes,:]
+            # due to symmetric spectrum, there's a factor of 2, but not for wave-0
+            xym[1:,:] = 2*xym[1:,:]
+            if wave >= 0:
+                xym = xym[wave,:][newaxis,:]
 	else:
-		mask = zeros_like(x)
-		if wave >= 0:
-			mask[wave,:] = 1
-			xym = real(fft.ifft(x*mask,axis=0))
-		else:
-			for m in range(x.shape[0]):
-				mask[m,:] = 1
-				xym[m,:] = real(fft.ifft(x*mask,axis=0)).mean(axis=0)
-				mask[m,:] = 0
-	xym = AxRoll(xym,axis,'i')
+            mask = zeros_like(x)
+            if wave >= 0:
+                mask[wave,:] = 1
+                xym = real(fft.ifft(x*mask,axis=0))[wave,:][newaxis,:]
+            else:
+                for m in range(xym.shape[0]):
+                    mask[m,:] = 1
+                    xym[m,:] = real(fft.ifft(x*mask,axis=0))[m,:]
+                    mask[m,:] = 0
+        xym = AxRoll(xym,axis,'i')
 	return squeeze(xym)
 
 ##helper functions
