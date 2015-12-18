@@ -426,12 +426,11 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     if wave < 0:
         v = GetAnomaly(v)
         t = GetAnomaly(t)
-        t = v*t
-        t = t/dthdp[:,:,:,np.newaxis] # t = v'Th'/(dTh_bar/dp)
-        t_bar = t.mean(axis=-1) # t_bar = bar(v'Th'/(dTh_bar/dp))
+        t = (v*t).mean(axis=-1) # t = bar(v'Th')
+        t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     else:
-        t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = v'Th'_{k=wave}
-        t_bar = t/dthdp # t_bar = bar(v'Th'/(dTh_bar/dp))
+        t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
+        t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     #
     return v_bar,t_bar
 
@@ -595,8 +594,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	input dimensions must be time x pres x lat x lon.
     	output is either space-time (wave<0, dimensions time x pres x lat)
          or space-time-wave (dimensions wave x time x pres x lat).
-        Output units are [w_bar] = [omega], [R*vt_bar] = [vcomp*pfull/m], i.e.
-         if [omega] = Pa/s and [pfull]=hPa, w* = wbar/100*+R*vt_bar [hPa/s]
+        Output units are hPa/s, and the units of omega are expected to be hPa/s.
         
         INPUTS:
             data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull,lat)
@@ -619,9 +617,6 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     
     # read input file
     if isinstance(data,str):
-        print 'Reading data'
-        #
-        #if outFile == 'same': outFile = data
         inFile = nc.Dataset(data, 'r')
         if slice == 'all':
         	slice=[0,inFile.variables[omega][:].shape[0]]
