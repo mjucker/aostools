@@ -369,9 +369,8 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
 
 ##############################################################################################
 ## helper functions
-def update_progress(progress):
+def update_progress(progress,barLength=10):
     import sys
-    barLength = 10 # Modify this to change the length of the progress bar
     status = ""
     if isinstance(progress, int):
         progress = float(progress)
@@ -386,7 +385,7 @@ def update_progress(progress):
         status = '\r\n'
     #status = "Done...\r\n"
     block = int(round(barLength*progress))
-    text = "\rPercent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
+    text = "\r[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
     sys.stdout.write(text)
     sys.stdout.flush()
 #
@@ -676,14 +675,14 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
       div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
       div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
     """
-    from numpy import pi,cos,tan,mat,newaxis,reshape,mat,gradient
+    from numpy import pi,cos,sin,newaxis,gradient
     # some constants
     Rd    = 287.04
     cp    = 1004
     kappa = Rd/cp
     p0    = 1000
     Omega = 2*pi/(24*3600.) # [1/s]
-    a0    = 6.378e6
+    a0    = 6.371e6
     # geometry
     pilat = lat*pi/180
     dphi  = gradient(pilat)[newaxis,newaxis,:]
@@ -723,7 +722,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     ## compute vertical component of EP flux.
     ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
     #
-    ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
+    ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2] 
     if w is not None:
         w = GetAnomaly(w) # w = w' [hPa/s]
         if wave<0:
@@ -888,7 +887,7 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
         """
     from numpy import cos,pi
     # constants
-    a0    = 6.378e6
+    a0    = 6.371e6
     ps    = 1e3
     H     = 7e3
     # geometric quantitites
