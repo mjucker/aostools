@@ -423,8 +423,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     dthdp[dthdp==0] = np.NaN
     # now get wave component(s)
     if wave < 0:
-        v = GetAnomaly(v)
-        t = GetAnomaly(t)
+        v = GetAnomaly(v) # v = v'
+        t = GetAnomaly(t) # t = t'
         t = (v*t).mean(axis=-1) # t = bar(v'Th')
         t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     else:
