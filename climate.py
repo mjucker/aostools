@@ -78,7 +78,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
         timeCal = cal
     else:
         try:
-            timeCal = timeVar.calendar
+            timeCal = str(timeVar.calendar)
             if timeCal not in calendar_types:
                 print 'Cannot understand the calendar type, which is: '+timeCal
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
@@ -410,7 +410,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # some constants
     kappa = 2./7
     #
-    # pressure quantitites, p in hPa
+    # pressure quantitites
     pp0 = (p0/p[np.newaxis,:,np.newaxis,np.newaxis])**kappa
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]
     # convert to potential temperature
@@ -421,7 +421,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # prepare pressure derivative
     dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
-    # now get wave component(s)
+    # now get wave component
     if wave < 0:
         v = GetAnomaly(v) # v = v'
         t = GetAnomaly(t) # t = t'
