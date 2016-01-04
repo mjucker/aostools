@@ -79,16 +79,16 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         try:
             timeCal = str(timeVar.calendar)
-            print 'found calendar type'+timeCal
-            if timeCal not in calendar_types:
+            if not CheckAny(calendar_types,timeCal):
                 print 'Cannot understand the calendar type, which is: '+timeCal
-            timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+                timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
         except:
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
             timeVar.setncattr('calendar',timeCal)
-            print 'The calendar type is assumed to be '+timeCal
     if timeCal not in calendar_types:
         raise ValueError('calender must be in '+str(calendar_types))
+    else:
+        print 'Assuming calendar type '+timeCal
     #
     def FindDayOfYear(dateStruc,dateUnits,calendar):
         import netcdftime as nct
