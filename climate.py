@@ -79,6 +79,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         try:
             timeCal = str(timeVar.calendar)
+            print 'found calendar type'+timeCal
             if timeCal not in calendar_types:
                 print 'Cannot understand the calendar type, which is: '+timeCal
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
