@@ -782,7 +782,10 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
           
-        If y=[] and wave=-1, returns the mean for wave-0 and cosine amplitudes for all other waves 
+        If y!=[], returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Shape is same as input, except axis which is len(axis)/2+1 due to Fourier symmetry for real signals.
+        
+        If y=[] and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
+        If y=[] and wave=-1, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
 	
 	INPUTS:
 		x          - the array to decompose
@@ -794,39 +797,55 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 		xym        - data in Fourier space
 	"""
 	from numpy import fft,squeeze
+	initShape = x.shape
 	x = AxRoll(x,axis)
-	#compute anomalies
+	# compute anomalies
 	if do_anomaly:
             x = GetAnomaly(x,0)
         if len(y) > 0:
             y = AxRoll(y,axis)
             if do_anomaly:
                 y = GetAnomaly(y,0)
-    #Fourier decompose
+    # Fourier decompose
 	x = fft.fft(x,axis=0)
-        nmodes = x.shape[0]/2+1
+	nmodes = x.shape[0]/2+1
 	if wave < 0:
-            xym = zeros((nmodes,)+x.shape[1:])
+		if len(y) > 0:
+			xym = zeros((nmodes,)+x.shape[1:])
+		else:
+			xym = zeros((nmodes,)+initShape)
 	if len(y) > 0:
             y = fft.fft(y,axis=0)
-            #Take out the waves - 
+            # Take out the waves
             nl  = x.shape[0]**2
-            xym  = (real(x*y.conj())/nl)[:nmodes,:]
+            xyf  = real(x*y.conj())/nl
             # due to symmetric spectrum, there's a factor of 2, but not for wave-0
-            xym[1:,:] = 2*xym[1:,:]
-            if wave >= 0:
-                xym = xym[wave,:][newaxis,:]
+            mask = zeros_like(xyf)
+            if wave < 0:
+            	for m in range(xym.shape[0]):
+            		mask[m,:] = 1
+            		mask[-m,:]= 1
+            		xym[m,:] = sum(xyf*mask,axis=0)
+            		mask[:] = 0
+            	xym = AxRoll(xym,axis,'i')
+            else:
+            	xym = xyf[wave,:]
+            	if wave >= 0:
+                	xym = xym + xyf[-wave,:]
 	else:
             mask = zeros_like(x)
             if wave >= 0:
                 mask[wave,:] = 1
-                xym = real(fft.ifft(x*mask,axis=0))[wave,:][newaxis,:]
+                mask[-wave,:]= 1 # symmetric spectrum for real signals
+                xym = real(fft.ifft(x*mask,axis=0))
+                xym = AxRoll(xym,axis,'i')
             else:
                 for m in range(xym.shape[0]):
                     mask[m,:] = 1
-                    xym[m,:] = real(fft.ifft(x*mask,axis=0))[m,:]
-                    mask[m,:] = 0
-        xym = AxRoll(xym,axis,'i')
+                    mask[-m,:]= 1 # symmetric spectrum for real signals
+                    fourTmp = real(fft.ifft(x*mask,axis=0))
+                    xym[m,:] = AxRoll(fourTmp,axis,'i')
+                    mask[:] = 0
 	return squeeze(xym)
 
 ##helper functions
