@@ -542,7 +542,7 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
     return AM
 
 ##############################################################################################
-def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3, wkdir='./'):
+def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3):
     """Computes the residual meridional wind v* (as a function of time).
         
         INPUTS:
@@ -552,7 +552,6 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
             pfull - name of pressure in inFile [hPa]
             wave  - decompose into given wave number contribution if wave>=0
             p0    - pressure basis to compute potential temperature [hPa]
-            wkdir - root directory, from with the path to the input file is taken
         OUTPUTS:
             vstar       - residual meridional wind, as a function of time
     """
@@ -567,7 +566,7 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
         print 'Reading data'
         update_progress(0)
         #
-        inFile = nc.Dataset(wkdir + data, 'r')
+        inFile = nc.Dataset(data, 'r')
         t = inFile.variables[temp][:]
         update_progress(.45)
         v = inFile.variables[vcomp][:]
