@@ -289,11 +289,11 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
 
 
 ##############################################################################################
-def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3, wkdir='./'):
+def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3):
     """Computes the residual stream function \Psi* (as a function of time).
         
         INPUTS:
-            inFileName  - filename of input file, relative to wkdir
+            data        - filename of input file or dictionary with temp,vcomp,lat,pfull
             outFileName - filename of output file, 'none', or 'same'
             temp        - name of temperature field in inFile
             vcomp       - name of meridional velocity field in inFile
@@ -301,61 +301,68 @@ def ComputePsi(inFileName, outFileName='same', temp='temp', vcomp='vcomp', lat='
             pfull       - name of pressure in inFile [hPa]
             time        - name of time field in inFile. Only needed if outFile used
             p0          - pressure basis to compute potential temperature [hPa]
-            wkdir       - root directory, from with the paths inFile and outFile are taken
         OUTPUTS:
             psi         - stream function, as a function of time
             psis        - residual stream function, as a function of time
     """
     import netCDF4 as nc
     import numpy as np
+    from scipy.integrate import cumtrapz
+    import os
 
     # some constants
     kappa = 2./7
     a0    = 6371000
     g     = 9.81
 
-    # read input file
-    print 'Reading data'
-    update_progress(0)
-    if outFileName == 'same':
-        mode = 'a'
+    if isinstance(data,str):
+        # check if file exists
+        if not os.path.isfile(inFileName):
+            raise IOError('File '+inFileName+' does not exist')
+        # read input file
+        print 'Reading data'
+        update_progress(0)
+        if outFileName == 'same':
+            mode = 'a'
+        else:
+            mode = 'r'
+        inFile = nc.Dataset(inFileName, mode)
+        t = inFile.variables[temp][:]
+        update_progress(.45)
+        v = inFile.variables[vcomp][:]
+        update_progress(.90)
+        l = inFile.variables[lat][:]
+        update_progress(.95)
+        p = inFile.variables[pfull][:]
+        update_progress(1)
     else:
-        mode = 'r'
-    inFile = nc.Dataset(wkdir + inFileName, mode)
-    t = inFile.variables[temp][:]
-    update_progress(.25)
-    v = inFile.variables[vcomp][:]
-    update_progress(.50)
-    l = inFile.variables[lat][:]
-    update_progress(.75)
-    p = inFile.variables[pfull][:]
-    update_progress(1)
-
+        t = data[temp]
+        v = data[vcomp]
+        l = data[lat]
+        p = data[pfull]
+        data = []
+    p = p*100 # [Pa]
+    #
     ## compute psi
-    print 'Computing psi'
-    update_progress(0)
 
     v_bar,t_bar = ComputeVertEddy(v,t,p,p0) # t_bar = bar(v'Th'/(dTh_bar/dp))
 
     # Eulerian streamfunction
-    dp  = np.gradient(p)[np.newaxis,:,np.newaxis]*100.
-    psi = np.cumsum(v_bar*dp,axis=1)
+    psi = cumtrapz(v_bar,x=p,axis=1,initial=0) # [m.Pa/s]
     v_bar=v=t=[]
-    update_progress(.50)
 
 
     ## compute psi* = psi - bar(v'Th'/(dTh_bar/dp))
     psis = psi - t_bar
     t_bar = []
-    psi = 2*np.pi*a0/g*psi *np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.)
-    psis= 2*np.pi*a0/g*psis*np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.)
-    update_progress(1)
+    psi = 2*np.pi*a0/g*psi *np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.) #[kg/s]
+    psis= 2*np.pi*a0/g*psis*np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.) #[kg/s]
 
     ## write outputfile
     if outFileName is not 'none':
         print 'Writing psi* into file'
         if outFileName is not 'same':
-            outFile = nc.Dataset(wkdir + outFileName,'w')
+            outFile = nc.Dataset(outFileName,'w')
             outFile  = CopyDims(inFile, outFile, [time,pfull,lat])
         else:
             outFile = inFile
