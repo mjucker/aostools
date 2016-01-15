@@ -18,6 +18,18 @@ def CheckAny(set,string):
         if c in string: return 1
     return 0
 
+## helper function: return the day of the year instead of full date
+def FindDayOfYear(dateStruc,dateUnits,calendar):
+    import netcdftime as nct
+    nDays = len(dateStruc)
+    t = nct.utime(dateUnits,calendar=calendar)
+    dateLoc = np.zeros_like(dateStruc)
+    for d in range(nDays):
+        dateLoc[d] = nct.datetime(1,dateStruc[d].month,dateStruc[d].day)
+    dayOfYear = t.date2num(dateLoc)
+    return dayOfYear
+
+## compute climatologies
 def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     """Compute climatologies from netCDF files.
         
@@ -90,15 +102,6 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         print 'Assuming calendar type '+timeCal
     #
-    def FindDayOfYear(dateStruc,dateUnits,calendar):
-        import netcdftime as nct
-        nDays = len(dateStruc)
-        t = nct.utime(dateUnits,calendar=calendar)
-        dateLoc = np.zeros_like(dateStruc)
-        for d in range(nDays):
-            dateLoc[d] = nct.datetime(1,dateStruc[d].month,dateStruc[d].day)
-        dayOfYear = t.date2num(dateLoc)
-        return dayOfYear
     # split everything into years,months,days
     date = nc.num2date(time,timeUnits,timeCal)
     days = np.zeros(len(date),)
@@ -1038,6 +1041,19 @@ def SymmetricColorbar(fig, obj, zero=0):
 	c1 = max(cmxp,-cmnp) + zero
 	obj.set_clim(c0,c1)
 
+#######################################################
+def Convert2Days(time,units,calendar):
+    """
+    """
+    import netCDF4 as nc
+    import netcdftime as nct
+    date = nc.num2date(time,units,calendar)
+    unitArray = units.split()
+    dayUnits = units.replace(unitArray[0],'days')
+    t = nct.utime(dayUnits,calendar=calendar)
+    return t.date2num(date)
+
+    
 
 
 
