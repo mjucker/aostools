@@ -258,11 +258,12 @@ def ReadFile(fileName, show='short', mode='r'):
 
 
 #######################################################
-def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=None, meanDim=None, fileFormat='NETCDF4', compress=False):
+def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=None, meanDim=None, fileFormat='NETCDF3_64BIT', compress=False):
     """Combine a number of files into one along a given dimension
 
        The option to also average out one dimension does not work yet.
-       For ParaView, the fileFormat should probably be NETCDF3_64BIT.
+       For ParaView, the fileFormat should probably be NETCDF3_64BIT, but
+       for compression, it has to be NETCDF4 or NETCDF4_CLASSIC.
     """
     import numpy as np
     import netCDF4 as nc
@@ -293,7 +294,7 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
             # remove the averaging dimension
             if meanAxis is not None and var is not combineDim:
                 dims = tuple(d for d in dims if d != meanDim)
-            outVars[var] = outFile.createVariable(var,'f4',dims,zlib=compress)
+            outVars[var] = outFile.createVariable(var,'f4',dims,zlib=compress,complevel=9)
             inVar = file.variables[var]
             for att in inVar.ncattrs():
                 if att != 'scale_factor' and att != 'add_offset':
