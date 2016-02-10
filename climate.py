@@ -20,15 +20,15 @@ def CheckAny(set,string):
 
 def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     """Compute climatologies from netCDF files.
-        
+
         ComputeClimate(file,climatType,wkdir='/',timeDim='time')
-        
+
         Inputs:
         file        file name, relative path from wkdir
         climatType  'daily', 'monthly', 'DJF', 'JJA', or any
                     combination of months according to two-letter code
                     Ja Fe Ma Ap My Jn Jl Au Se Oc No De
-        wkdir       working directory, in with 'file' must be, and to which the output
+        wkdir       working directory, in which 'file' must be, and to which the output
                     is written
         timeDim     name of the time dimension in the netcdf file
         cal         calendar, if other than within the netcdf file
@@ -71,7 +71,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
         unitSplit[0] = newUnits
         timeUnits = ' '.join(unitSplit)
     timeStep = np.diff(timeVar).mean()
-    print 'The time dimension is in units of',timeUnits,', with a time step of',timeStep,'days'
+    print 'The time dimension is in units of',timeUnits,', with a mean time step of',timeStep,'days'
     # check the calendar type
     getCal = False
     if cal:
@@ -111,7 +111,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
         monthsS.append(monthList[date[d].month-1])
         years[d] = date[d].year
     # Now, need to know about the type of climatology we want.
-    # 
+    #
     if climType == 'daily':
         dayOfYear = FindDayOfYear(date,timeUnits,timeCal)
         climTimeDim = np.sort(np.unique(dayOfYear))
@@ -127,7 +127,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
             climTimeVar[indices] = 1
 
     # Create the output file, including dimensions.
-    # 
+    #
     # We exclude time for seasonal climatologies, but need time for daily and monthly.
 
     outFileName = wkdir + file[0:-3] + '_' + climatType + '.nc'
@@ -151,7 +151,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
                 units = 'days'
             else:
                 units = 'months'
-            dTime = climTimeDim 
+            dTime = climTimeDim
             outDim = outFile.createDimension(dim,nTime)
             timeValue = dTime
             outVar = outFile.createVariable(dim,str(ncFile.variables[dim].dtype),(dim,))
@@ -164,7 +164,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 
 
     # Finally, perform the averaging and write into new file
-    # 
+    #
     # Here, we need to be very careful in the event of packaged data: netCDF4 knows about packaging when reading data, but we need to use scale_factor and add_offset to package the data back when writing the new file.
 
     print 'Averaging variables:'
@@ -208,7 +208,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 ##############################################################################################
 def ComputeSaturationMixingRatio(T, p):
     """Computes the saturation water vapor mixing ratio according to Clausius-Clapeyron
-        
+
         INPUTS:
             T - temperature in Kelvin
             p - pressure in hPa/mbar
@@ -222,7 +222,7 @@ def ComputeSaturationMixingRatio(T, p):
     ES0 = 610.78
     HLV = 2.5e6
     Tf = 273.16
-    
+
     # pressure is assumed in hPa: convert to Pa
     p = p*100
     # compute saturation pressure
@@ -251,10 +251,10 @@ def ComputeSaturationMixingRatio(T, p):
 ##############################################################################################
 def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', pfull='pfull', wkdir='/'):
     """Computes relative humidity from temperature and specific humidity.
-        
+
         File inFile is assumed to contain both temperature and specific humidity.
         Relative humidity is either output of the function, or written to the file outFile.
-        
+
         Inputs:
             inFile    Name of the file (path relative from wkdir)
                         containing temperature and moisture
@@ -269,7 +269,7 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
     import netCDF4 as nc
     import numpy as np
     # relative humidity is then q/qsat*100[->%]
-    
+
     # read input file
     inFile = nc.Dataset(inFile, 'r')
     t = inFile.variables[temp]
@@ -291,7 +291,7 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
 ##############################################################################################
 def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3):
     """Computes the residual stream function \Psi* (as a function of time).
-        
+
         INPUTS:
             data        - filename of input file or dictionary with temp,vcomp,lat,pfull
             outFileName - filename of output file, 'none', or 'same'
@@ -402,7 +402,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
         bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
         Dimensions must be time x pres x lat x lon.
         Output dimensions are: [v_bar] = [v], [t_bar] = [v*p]
-        
+
         INPUTS:
             v    - meridional wind
             t    - temperature
@@ -444,10 +444,10 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 ##############################################################################################
 def eof(X,n=1):
     """Principal Component Analysis / Empirical Orthogonal Functions / SVD
-        
+
         Uses Singular Value Decomposition to find the dominant modes of variability.
         The field X can be reconstructed with Y = dot(EOF,PC) + X.mean(axis=time)
-        
+
         INPUTS:
             X -- Field, shape (time x space).
             n -- Number of modes to extract
@@ -461,7 +461,7 @@ def eof(X,n=1):
     """
     import numpy as np
     import scipy.signal as sg
-    
+
     # find out which dimension is time
     #  assume that time is longer dimension
     #shpe = np.shape(X)
@@ -494,7 +494,7 @@ def eof(X,n=1):
 def ComputeAnnularMode(lat, pres, time, data, choice='z'):
     """Compute annular mode as in Geber et al, GRL 2008.
         This is basically the first PC, but normalized to unit variance and zero mean.
-        
+
         INPUTS:
             lat    - latitude
             pres   - pressure
@@ -551,7 +551,7 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
 ##############################################################################################
 def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3):
     """Computes the residual meridional wind v* (as a function of time).
-        
+
         INPUTS:
             data  - filename of input file, relative to wkdir, or dictionary with {T,v,pfull}
             temp  - name of temperature field in data
@@ -592,7 +592,7 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
     vstar = v_bar - np.gradient(t_bar,1,dp,1,edge_order=2)[1]
 
     return vstar
-    
+
 
 ##############################################################################################
 def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=[-1], p0=1e3):
@@ -601,7 +601,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	output is either space-time (wave<0, dimensions time x pres x lat)
          or space-time-wave (dimensions wave x time x pres x lat).
         Output units are hPa/s, and the units of omega are expected to be hPa/s.
-        
+
         INPUTS:
             data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull,lat)
             slice - time slice to work with (large memory requirements). Array [start,stop] or 'all'
@@ -610,7 +610,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
             vcomp - name of meridional velocity field in data
             pfull - name of pressure in data [hPa]
             lat   - name of latitude in data [deg]
-            wave  - decompose into given wave number contribution(s) if 
+            wave  - decompose into given wave number contribution(s) if
             		 len(wave)=1 and wave>=0, or len(wave)>1
             p0    - pressure basis to compute potential temperature [hPa]
         OUTPUTS:
@@ -620,7 +620,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     import numpy as np
 
     a0    = 6371000.
-    
+
     # read input file
     if isinstance(data,str):
         inFile = nc.Dataset(data, 'r')
@@ -729,7 +729,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     ## compute vertical component of EP flux.
     ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
     #
-    ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2] 
+    ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
     if w is not None:
         w = GetAnomaly(w) # w = w' [hPa/s]
         if wave<0:
@@ -740,7 +740,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #
     #
     # We now have to make sure we get the geometric terms right
-    # With our definition, 
+    # With our definition,
     #  div1 = 1/(a.cosphi)*d/dphi[a*cosphi*ep1_cart*cosphi],
     #    where a*cosphi comes from using cartesian, and cosphi from the derivative
     # With some algebra, we get
@@ -788,12 +788,12 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 ##############################################################################################
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
-          
+
         If y!=[], returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Shape is same as input, except axis which is len(axis)/2+1 due to Fourier symmetry for real signals.
-        
+
         If y=[] and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
         If y=[] and wave=-1, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
-	
+
 	INPUTS:
 		x          - the array to decompose
 		y          - second array if wanted
@@ -902,7 +902,7 @@ def AxRoll(x,ax,start_mode=0):
 def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
     """Convert value (probably vector component) of one unit
         into another one.
-        
+
         INPUTS:
         data  - data to convert
         mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
@@ -959,9 +959,9 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
     """Compute the meridional temperature gradient, integrated between minLat and maxLat.
     	Thus, baroclinicity is defined as the difference in temperature between minLat and maxLat,
     	optionally integrated from the surface to minPres.
-    	
+
         INPUTS:
-        lat     - latitude [degrees] 
+        lat     - latitude [degrees]
         tempIn  - temperature, shape time x pressure x lat
         hemi    - hemisphere to consider. 'both','N','S'
         minLat  - latitude closest to equator
@@ -1024,7 +1024,7 @@ def SymmetricColorbar(fig, obj, zero=0):
 	"""Make colorbar symmetric with respect to zero.
 		Note: this does not update the colobar limits, but adjusts
 		the colormap such that the node is around zero.
-		
+
 		INPUTS:
 		fig  - figure object to attach colobar to
 		obj  - color plot [e.g. obj=contourf()]
@@ -1037,9 +1037,3 @@ def SymmetricColorbar(fig, obj, zero=0):
 	c0 = min(cmnp,-cmxp) + zero
 	c1 = max(cmxp,-cmnp) + zero
 	obj.set_clim(c0,c1)
-
-
-
-
-
-
