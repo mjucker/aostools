@@ -18,6 +18,18 @@ def CheckAny(set,string):
         if c in string: return 1
     return 0
 
+## helper function: return the day of the year instead of full date
+def FindDayOfYear(dateStruc,dateUnits,calendar):
+    import netcdftime as nct
+    nDays = len(dateStruc)
+    t = nct.utime(dateUnits,calendar=calendar)
+    dateLoc = np.zeros_like(dateStruc)
+    for d in range(nDays):
+        dateLoc[d] = nct.datetime(1,dateStruc[d].month,dateStruc[d].day)
+    dayOfYear = t.date2num(dateLoc)
+    return dayOfYear
+
+## compute climatologies
 def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     """Compute climatologies from netCDF files.
 
@@ -90,15 +102,6 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         print 'Assuming calendar type '+timeCal
     #
-    def FindDayOfYear(dateStruc,dateUnits,calendar):
-        import netcdftime as nct
-        nDays = len(dateStruc)
-        t = nct.utime(dateUnits,calendar=calendar)
-        dateLoc = np.zeros_like(dateStruc)
-        for d in range(nDays):
-            dateLoc[d] = nct.datetime(1,dateStruc[d].month,dateStruc[d].day)
-        dayOfYear = t.date2num(dateLoc)
-        return dayOfYear
     # split everything into years,months,days
     date = nc.num2date(time,timeUnits,timeCal)
     days = np.zeros(len(date),)
@@ -424,8 +427,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # convert to potential temperature
     t = t*pp0 # t = theta
     # zonal means
-    v_bar = v.mean(axis=-1)
-    t_bar = t.mean(axis=-1) # t_bar = theta_bar
+    v_bar = np.nanmean(v,axis=-1)
+    t_bar = np.nanmean(t,axis=-1) # t_bar = theta_bar
     # prepare pressure derivative
     dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
@@ -433,7 +436,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     if wave < 0:
         v = GetAnomaly(v) # v = v'
         t = GetAnomaly(t) # t = t'
-        t = (v*t).mean(axis=-1) # t = bar(v'Th')
+        t = np.nanmean(v*t,axis=-1) # t = bar(v'Th')
         t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     else:
         t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
@@ -597,15 +600,16 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
 ##############################################################################################
 def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', pfull='pfull', lat='lat', wave=[-1], p0=1e3):
     """Computes the residual upwelling w* as a function of time.
-    	input dimensions must be time x pres x lat x lon.
-    	output is either space-time (wave<0, dimensions time x pres x lat)
+
+    	Input dimensions must be time x pres x lat x lon.
+    	Output is either space-time (wave<0, dimensions time x pres x lat)
          or space-time-wave (dimensions wave x time x pres x lat).
         Output units are hPa/s, and the units of omega are expected to be hPa/s.
 
         INPUTS:
-            data  - filename of input file, relative to wkdir, or dictionary with (w,T,v,pfull,lat)
+            data  - filename of input file, or dictionary with (w,T,v,pfull,lat)
             slice - time slice to work with (large memory requirements). Array [start,stop] or 'all'
-            omega - name of pressure velocity field in data
+            omega - name of pressure velocity field in data [hPa/s]
             temp  - name of temperature field in data
             vcomp - name of meridional velocity field in data
             pfull - name of pressure in data [hPa]
@@ -650,7 +654,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	# get the meridional derivative
     	vt_bar[w,:] = np.gradient(vt_bar[w,:],1,1,dphi,edge_order=2)[-1]
     # compute zonal mean upwelling
-    w_bar = data[omega].mean(axis=-1)
+    w_bar = np.nanmean(data[omega],axis=-1)
     # put it all together
     if len(wave)==1:
     	return w_bar + np.squeeze(R*vt_bar)
@@ -702,7 +706,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #
     # absolute vorticity
     if do_ubar:
-        ubar = u.mean(axis=-1)
+        ubar = np.nanmean(u,axis=-1)
         fhat = R*gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]
     else:
         fhat = 0.
@@ -715,7 +719,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     u = GetAnomaly(u)
     v = GetAnomaly(v)
     if wave<0:
-        upvp = (u*v).mean(axis=-1)
+        upvp = np.nanmean(u*v,axis=-1)
     else:
         upvp = GetWaves(u,v,wave=wave)
     #
@@ -733,7 +737,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     if w is not None:
         w = GetAnomaly(w) # w = w' [hPa/s]
         if wave<0:
-            w = (w*u).mean(axis=-1) # w = bar(u'w') [m.hPa/s2]
+            w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
         else:
             w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
         ep2_cart = ep2_cart - w # [m.hPa/s2]
@@ -1037,3 +1041,23 @@ def SymmetricColorbar(fig, obj, zero=0):
 	c0 = min(cmnp,-cmxp) + zero
 	c1 = max(cmxp,-cmnp) + zero
 	obj.set_clim(c0,c1)
+
+#######################################################
+def Convert2Days(time,units,calendar):
+    """
+    """
+    import netCDF4 as nc
+    import netcdftime as nct
+    date = nc.num2date(time,units,calendar)
+    unitArray = units.split()
+    dayUnits = units.replace(unitArray[0],'days')
+    t = nct.utime(dayUnits,calendar=calendar)
+    return t.date2num(date)
+
+    
+
+
+
+
+
+>>>>>>> origin/master

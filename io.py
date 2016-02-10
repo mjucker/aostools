@@ -256,3 +256,75 @@ def ReadFile(fileName, show='short', mode='r'):
                 print file.variables[v]
     return file
 
+
+#######################################################
+def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=None, meanDim=None, fileFormat='NETCDF3_64BIT', compress=False):
+    """Combine a number of files into one along a given dimension
+
+       The option to also average out one dimension does not work yet.
+       For ParaView, the fileFormat should probably be NETCDF3_64BIT, but
+       for compression, it has to be NETCDF4 or NETCDF4_CLASSIC.
+    """
+    import numpy as np
+    import netCDF4 as nc
+
+
+    # create output file
+    outFile = nc.Dataset(fileName,'w',format=fileFormat)
+    
+    # copy all dimensions from first file in list to new file
+    file = nc.Dataset(fileList[0],'r')
+    for dim in file.dimensions:
+        if dim == combineDim:
+            dlen = 0 # unlimited
+        else:
+            dlen = len(file.dimensions[dim])
+        outDim = outFile.createDimension(dim,dlen)
+        inVar  = file.variables[dim]
+        outVar = outFile.createVariable(dim,str(file.variables[dim].dtype),(dim,))
+        outVar = CopyAtts(inVar,outVar)
+        outVar[:] = inVar[:]    
+    
+    # now add all variables
+    outVars = {}
+    outVars[combineDim] = outFile.variables[combineDim]
+    for var in file.variables:
+        if not var in outFile.variables:
+            dims = file.variables[var].dimensions
+            # remove the averaging dimension
+            if meanAxis is not None and var is not combineDim:
+                dims = tuple(d for d in dims if d != meanDim)
+            outVars[var] = outFile.createVariable(var,'f4',dims,zlib=compress,complevel=9)
+            inVar = file.variables[var]
+            for att in inVar.ncattrs():
+                if att != 'scale_factor' and att != 'add_offset':
+                    outVars[var].setncattr(att,inVar.getncattr(att))
+    # get all variables from first file
+    tmpVars = {}
+    for var in [combineDim]+outVars.keys():
+        tmpVar = file.variables[var][:]
+        if meanAxis is not None:
+            tmpVar = tmpVar.mean(axis=meanAxis)
+        tmpVars[var] = tmpVar[:]
+    file.close()
+    print 'done with file',fileList[0]
+    
+    # finally, add all other files
+    for f in fileList[1:]:
+        file = nc.Dataset(f,'r')
+        for var in outVars.keys():
+            tmpVar = file.variables[var][:]
+            if meanAxis is not None:
+                tmpVar = tmpVar.mean(axis=meanAxis)
+            if var == combineDim:
+                tmpVars[var] = np.concatenate((tmpVars[var],tmpVar))
+            else:
+                tmpVars[var] = np.concatenate((tmpVars[var],tmpVar),axis=combineAxis)
+        file.close()
+        print 'done with file',f
+    #
+    # and put all of it into the new file
+    outFile.variables[combineDim][:] = tmpVars[combineDim][:]
+    for var in outVars.keys():
+        outVars[var][:] = tmpVars[var][:]
+    outFile.close()
