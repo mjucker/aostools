@@ -79,7 +79,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
         newUnits = raw_input('Please provide units [seconds,days,months] ')
         if newUnits not in ["seconds","days","months"]:
             raise ValueError('units must be seconds, days, or months')
-        unitSplit = newUnits.split()
+        unitSplit = timeUnits.split()
         unitSplit[0] = newUnits
         timeUnits = ' '.join(unitSplit)
     timeStep = np.diff(timeVar).mean()
@@ -1054,10 +1054,4 @@ def Convert2Days(time,units,calendar):
     t = nct.utime(dayUnits,calendar=calendar)
     return t.date2num(date)
 
-    
 
-
-
-
-
->>>>>>> origin/master
