@@ -14,7 +14,7 @@
 ## copy all dimensions from one file to the other
 def CopyDims(inFile, outFile, onlyDims=[]):
     """Copy all dimensions from one file to the other.
-        
+
         INPUTS:
         inFile  - netCDF4 Dataset of file containing the dimensions
         outFile - netCDF4 Dataset of file to which dimensions will be copied
@@ -37,7 +37,7 @@ def CopyDims(inFile, outFile, onlyDims=[]):
 ## copy all attributes of one variable to another
 def CopyAtts(inVar, outVar):
     """Copy all attributes of one variable to the other
-        
+
         INPUTS:
         inVar  - netCDF4 variable containing attributes to copy
         outVar - netCDF4 variable to which attributes will be copied
@@ -71,7 +71,7 @@ def MakeNewDimensionName(file,dimName):
             newName = dimName + str(i)
         return newName
 
-## check if the given dimension already exists in a file. 
+## check if the given dimension already exists in a file.
 #
 def CheckDimension(file,dimName,dimVal):
     """Check if desired dimension already exists in a file.
@@ -104,10 +104,10 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
 
         Note that due to differences bewteen python and netCDF dimensions,
         data.shape = (len(t),len(z),len(y),len(x))
-        
+
         Takes one variable, and stores it inside a generic netCDF file.
         If the file already exists, adds the variable to the file.
-        
+
         INPUTS:
         x,y,z,t     - spatial and time coordinates. If not all used, set to []
         data        - data to be written. Should be one variable.
@@ -122,7 +122,7 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
         """
     import netCDF4 as nc
     import os.path as op
-    
+
     dims = ()
     if op.isfile(outFileName):
         mode = 'r+'
@@ -194,10 +194,10 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
 def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
     """Write a new file with data, but dimensions from an existing file.
         Appends the new variable if outFileName==inFileName.
-        
+
         New file will have one field, data, with name varName, and the
         dimensions given in dimNames. Also takes care of edge dimensions.
-        
+
         INPUTS:
         data        - the variable to be put into the new file
         varName     - the name of the variable in the file
@@ -232,12 +232,12 @@ def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
 
 ## Read a file, and show the variables contained in it
 #
-def ReadFile(fileName, show='short', mode='r'):
+def ReadFile(fileName, show='silent', mode='r'):
     """Reads netCDF4 file fileName and shows available variables.
-        
+
         INPUTS:
         fileName: full path to file
-        show:     how much detail to show; 'min' for nothing, 'short' for one line, 'full'
+        show:     how much detail to show; 'silent' for nothing, 'short' for one line, 'full'
                     for full dimensionality and attributes
         mode:     'r' for read only, 'w' for write, 'r+' for read-write
         OUTPUTS:
@@ -248,7 +248,7 @@ def ReadFile(fileName, show='short', mode='r'):
     if not os.path.isfile(fileName):
         raise IOError('File '+fileName+' does not exist')
     file=nc.Dataset(fileName,mode)
-    if show != 'min':
+    if show != 'silent':
         print 'All variables:',file.variables.keys()
     if show == 'full':
         for v in file.variables.keys():
@@ -271,7 +271,7 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
 
     # create output file
     outFile = nc.Dataset(fileName,'w',format=fileFormat)
-    
+
     # copy all dimensions from first file in list to new file
     file = nc.Dataset(fileList[0],'r')
     for dim in file.dimensions:
@@ -283,8 +283,8 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
         inVar  = file.variables[dim]
         outVar = outFile.createVariable(dim,str(file.variables[dim].dtype),(dim,))
         outVar = CopyAtts(inVar,outVar)
-        outVar[:] = inVar[:]    
-    
+        outVar[:] = inVar[:]
+
     # now add all variables
     outVars = {}
     outVars[combineDim] = outFile.variables[combineDim]
@@ -308,7 +308,7 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
         tmpVars[var] = tmpVar[:]
     file.close()
     print 'done with file',fileList[0]
-    
+
     # finally, add all other files
     for f in fileList[1:]:
         file = nc.Dataset(f,'r')
