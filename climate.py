@@ -2,9 +2,6 @@
 # Filename: climate.py
 #
 # Code by Martin Jucker, distributed under an GPLv3 License
-# Any publication benefitting from this piece of code should cite
-# Jucker, M 2014. Scientific Visualisation of Atmospheric Data with ParaView.
-# Journal of Open Research Software 2(1):e4, DOI: http://dx.doi.org/10.5334/jors.al
 #
 # This file provides helper functions that can be useful as pre-viz-processing of files and data
 
@@ -50,7 +47,6 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     """
 
     # need to read netCDF and of course do some math
-
     import netCDF4 as nc
     import numpy as np
 
@@ -63,7 +59,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         climType = climatType
     monthList=['Ja','Fe','Ma','Ap','My','Jn','Jl','Au','Se','Oc','No','De']
-    calendar_types = ['standard', 'gregorian', 'proleptic_gregorian' 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
+    calendar_types = ['standard', 'gregorian', 'proleptic_gregorian', 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
 
 
     ncFile = nc.Dataset(wkdir+file,'r+')
@@ -209,12 +205,40 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     return outFileName
 
 ##############################################################################################
-def ComputeSaturationMixingRatio(T, p):
+# get the saturation mixing ration according to Clausius-Clapeyron
+
+# helper function: re-arrange array dimensions
+def AxRoll(x,ax,start_mode=0):
+    """Re-arrange array x so that axis 'ax' is first dimension.
+        Undo this if start_mode=='i'
+    """
+    from numpy import rollaxis
+    if isinstance(start_mode, basestring):
+        mode = start_mode
+    else:
+        mode = 'f'
+    #
+    if ax < 0:
+        n = len(x.shape) + ax
+    else:
+        n = ax
+    #
+    if mode is 'f':
+        y = rollaxis(x,n,start_mode)
+    elif mode is 'i':
+        y = rollaxis(x,0,n+1)
+    else:
+        raise Exception("mode must be 'f' for forward or 'i' for inverse")
+    return y
+
+
+def ComputeSaturationMixingRatio(T, p, pDim):
     """Computes the saturation water vapor mixing ratio according to Clausius-Clapeyron
 
         INPUTS:
-            T - temperature in Kelvin
-            p - pressure in hPa/mbar
+            T    - temperature in Kelvin, any size
+            p    - pressure in hPa/mbar, must be one dimension of T
+            pDim - index of dimension corresponding to p
         OUTPUTS:
             qsat - saturation water mixing ratio [kg/kg]
     """
@@ -226,47 +250,35 @@ def ComputeSaturationMixingRatio(T, p):
     HLV = 2.5e6
     Tf = 273.16
 
+    # make sure we are operating along the pressure axis
+    T = AxRoll(T,pDim)
+
     # pressure is assumed in hPa: convert to Pa
     p = p*100
     # compute saturation pressure
     esat = ES0*np.exp(HLV*(1./Tf - 1./T)/Rv)
-    # now, esat can have an arbitrary size
-    #  we know that one dimension is the same for p and esat
-    #  we also assume that all other dimensions have a different length
-    I = find(np.array(np.shape(esat)) == len(p))
-    # check that this dimension is unique
-    if len(I) != 1:
-        raise Exception("THE DIMENSIONS ARE NOT WELL DEFINED: CANNOT ASSIGN VERTICAL DIRECTION")
-    # now construct an array containing p with the shape of esat
-    sh = np.ones(len(np.shape(esat)))
-    sh = sh/sh
-    sh[I[0]] = len(p)
-    pfull = np.zeros_like(p)
-    pfull[:] = p
-    for i in range(len(sh)):
-        if sh[i] == 1:
-            pfull = np.expand_dims(pfull,axis=i)
+    qsat = np.zeros_like(esat)
     # finally, compute saturation mixing ratio from pressure
-    qsat = Rd/Rv*esat/(pfull-esat)
-    return qsat
+    for k in range(len(p)):
+        qsat[k,:] = Rd/Rv*esat[k,:]/(p[k]-esat[k,:])
+    return AxRoll(qsat,pDim,'i')
 
 
 ##############################################################################################
-def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', pfull='pfull', wkdir='/'):
+def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', pfull='pfull'):
     """Computes relative humidity from temperature and specific humidity.
 
         File inFile is assumed to contain both temperature and specific humidity.
         Relative humidity is either output of the function, or written to the file outFile.
 
         Inputs:
-            inFile    Name of the file (path relative from wkdir)
+            inFile    Name of the file (full path)
                         containing temperature and moisture
             outFile   Name of the output file containing specific humidity.
                         No output file is created if outFile='none'
             temp      Name of the temperature variable inside inFile
             sphum     Name of specific humidity variable inside inFile
             pfull     Name of full level pressure [hPa] inside inFile
-            wkdir     Path from which inFile and outFile is given relatively
     """
 
     import netCDF4 as nc
@@ -275,9 +287,9 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
 
     # read input file
     inFile = nc.Dataset(inFile, 'r')
-    t = inFile.variables[temp]
-    q = inFile.variables[sphum]
-    p = inFile.variables[pfull]
+    t = inFile.variables[temp][:]
+    q = inFile.variables[sphum][:]
+    p = inFile.variables[pfull][:]
 
     # compute saturation mixing ratio
     qsat = ComputeSaturationMixingRatio(t, p)
@@ -285,7 +297,13 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
     #write output file
     if outFile is not 'none':
         outFile = nc.Dataset(inFile[0:-3]+'_out.nc','w')
-        outFile = CopyDims(ncFile, outFile)
+        for dim in ncFile.dimensions:
+            outDim = outFile.createDimension(dim,len(ncFile.dimensions[dim]))
+            inVar = ncFile.variables[dim]
+            outVar = outFile.createVariable(dim, str(ncFile.variables[dim].dtype),(dim,))
+            for att in inVar.ncattrs():
+                outVar.setncattr(att,inVar.getncattr(att))
+            outVar[:] = inVar[:]
         outVar = outFile.createVariable('rh', 'f4', ncFile.variables[temp].dimensions)
         outVar[:] = q/qsat*1.e2
     return q/qsat*1.e2
@@ -320,8 +338,8 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 
     if isinstance(data,str):
         # check if file exists
-        if not os.path.isfile(inFileName):
-            raise IOError('File '+inFileName+' does not exist')
+        if not os.path.isfile(data):
+            raise IOError('File '+data+' does not exist')
         # read input file
         print 'Reading data'
         update_progress(0)
@@ -329,7 +347,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
             mode = 'a'
         else:
             mode = 'r'
-        inFile = nc.Dataset(inFileName, mode)
+        inFile = nc.Dataset(data, mode)
         t = inFile.variables[temp][:]
         update_progress(.45)
         v = inFile.variables[vcomp][:]
@@ -366,7 +384,14 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
         print 'Writing psi* into file'
         if outFileName is not 'same':
             outFile = nc.Dataset(outFileName,'w')
-            outFile  = CopyDims(inFile, outFile, [time,pfull,lat])
+            for dim in inFile.dimensions:
+                if dim in [time,pfull,lat]:
+                    outDim = outFile.createDimension(dim,len(inFile.dimensions[dim]))
+                    inVar = inFile.variables[dim]
+                    outVar = outFile.createVariable(dim, str(inFile.variables[dim].dtype),(dim,))
+                    for att in inVar.ncattrs():
+                        outVar.setncattr(att,inVar.getncattr(att))
+                outVar[:] = inVar[:]
         else:
             outFile = inFile
         outVar = outFile.createVariable('psi_star', 'f4', (time,pfull,lat,))
@@ -404,7 +429,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     """ Computes the vertical eddy components of the residual circulation,
         bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
         Dimensions must be time x pres x lat x lon.
-        Output dimensions are: [v_bar] = [v], [t_bar] = [v*p]
+        Output dimensions are: time x pres x lat
+        Output units are [v_bar] = [v], [t_bar] = [v*p]
 
         INPUTS:
             v    - meridional wind
@@ -807,7 +833,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	OUTPUTS:
 		xym        - data in Fourier space
 	"""
-	from numpy import fft,squeeze
+	from numpy import fft,squeeze,real,zeros,zeros_like
 	initShape = x.shape
 	x = AxRoll(x,axis)
 	# compute anomalies
@@ -877,29 +903,6 @@ def GetAnomaly(x,axis=-1):
     #bring axis back to where it was
     x = AxRoll(xt,axis,'i')
     return x
-#
-def AxRoll(x,ax,start_mode=0):
-    """Re-arrange array x so that axis 'ax' is first dimension.
-        Undo this if start_mode=='i'
-    """
-    from numpy import rollaxis
-    if isinstance(start_mode, basestring):
-        mode = start_mode
-    else:
-        mode = 'f'
-    #
-    if ax < 0:
-        n = len(x.shape) + ax
-    else:
-        n = ax
-    #
-    if mode is 'f':
-        y = rollaxis(x,n,start_mode)
-    elif mode is 'i':
-        y = rollaxis(x,0,n+1)
-    else:
-        raise Exception("mode must be 'f' for forward or 'i' for inverse")
-    return y
 
 
 #######################################################
