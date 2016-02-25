@@ -1025,22 +1025,23 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
 
 #######################################################
 def SymmetricColorbar(fig, obj, zero=0):
-	"""Make colorbar symmetric with respect to zero.
+    """Make colorbar symmetric with respect to zero.
 		Note: this does not update the colobar limits, but adjusts
 		the colormap such that the node is around zero.
 
 		INPUTS:
 		fig  - figure object to attach colobar to
 		obj  - color plot [e.g. obj=contourf()]
-		zero - node to assign color of 0
-	"""
-	cb = fig.colorbar(obj)
-	(cmn,cmx) = cb.get_clim()
-	cmnp = cmn-zero
-	cmxp = cmx-zero
-	c0 = min(cmnp,-cmxp) + zero
-	c1 = max(cmxp,-cmnp) + zero
-	obj.set_clim(c0,c1)
+    	zero - node to assign color of 0
+    """
+    cb = fig.colorbar(obj)
+    (cmn,cmx) = cb.get_clim()
+    cmnp = cmn-zero
+    cmxp = cmx-zero
+    c0 = min(cmnp,-cmxp) + zero
+    c1 = max(cmxp,-cmnp) + zero
+    obj.set_clim(c0,c1)
+    return cb
 
 #######################################################
 def Convert2Days(time,units,calendar):
@@ -1053,5 +1054,3 @@ def Convert2Days(time,units,calendar):
     dayUnits = units.replace(unitArray[0],'days')
     t = nct.utime(dayUnits,calendar=calendar)
     return t.date2num(date)
-
-
