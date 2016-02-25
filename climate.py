@@ -731,7 +731,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
     #
     ## compute vertical component of EP flux.
-    ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta']_bar / [theta]_p + ...
+    ## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta'] / [theta]_p + ...
     #
     ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
     if w is not None:
