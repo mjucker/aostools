@@ -458,6 +458,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # prepare pressure derivative
     dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
+    # time mean of d(theta_bar)/dp
+    dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
     # now get wave component
     if wave < 0:
         v = GetAnomaly(v) # v = v'
