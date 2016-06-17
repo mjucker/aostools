@@ -818,6 +818,140 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     return integ
 
 ##############################################################################################
+def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
+    ''' Compute the Brunt-Vaisala frequency from zonal mean temperature
+         N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+
+        INPUTS:
+            pres  - pressure [hPa]
+            Tz    - zonal mean temperature [K], dim pres x lat
+            H     - scale height [m]
+            Rd    - specific gas constant for dry air
+            cp    - specific heat of air at constant pressure
+        OUTPUTS:
+            N2  - Brunt-Vaisala frequency, [1/s2], dim pres x lat
+    '''
+    from numpy import newaxis,gradient
+    dp   = gradient(pres)[:,newaxis]*100.
+    dTdp = gradient(Tz,dp,1,edge_order=2)[0]
+    p = pres[:,newaxis]*100. # [Pa]
+    N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+    return N2
+
+def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
+    '''Compute the meridional gradient of potential vorticity.
+        This quantity has three terms,
+        q_\phi = A - B + C, where
+                A = 2*Omega*cos\phi
+                B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+                C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+
+        INPUTS:
+            lat  - latitude [degrees]
+            pres - pressure [hPa]
+            uz   - zonal mean zonal wind [m/s], dim pres x lat
+            Tz   - zonal mean temperature [K], dim pres x lat
+        OUTPUTS:
+            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat
+    '''
+    from numpy import pi,cos,sin,newaxis,gradient,deg2rad
+    # some constants
+    Omega = 2*pi/(86400.) # [1/s]
+    p0    = 1e5 #[Pa]
+
+    ## convert to Pa
+    p = pres[:]*100
+    dp = gradient(p)[:,newaxis]
+    p = p[:,newaxis]
+    ## convert to radians
+    latpi = deg2rad(lat)
+    dphi = gradient(latpi)[newaxis,:]
+    latpi = latpi[newaxis,:]
+
+    #
+    ## first term A
+    A = 2*Omega*cos(latpi)
+
+    #
+    ## second term B
+    dudphi = gradient(uz*cos(latpi),1,dphi,edge_order=2)[1]
+    B = dudphi/cos(latpi)/a0
+    B = gradient(B,1,dphi,edge_order=2)[1]
+
+    #
+    ## third term C
+    f = 2*Omega*sin(latpi)
+
+    dudp = gradient(uz,dp,1,edge_order=2)[0]
+
+    kappa = Rd/cp
+    pp0   = (p0/p)**kappa
+    theta = Tz*pp0
+    theta_p = gradient(theta,dp,1,edge_order=2)[0]
+
+    C = p*theta*dudp/(Tz*theta_p)
+    C = gradient(C,dp,1,edge_order=2)[0]
+    C = a0*f*f*C/Rd
+
+    return A-B+C
+
+
+def ComputeRefractiveIndex(lat,pres,uz,Tz,k):
+    '''
+        Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
+        Stationary waves are assumed, ie c=0.
+
+        meridonal PV gradient is
+        q_\phi = A - B + C, where
+                A = 2*Omega*cos\phi
+                B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+                C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+        Total refractive index is
+        n2 = a^2*[D - E - F], where
+                D = q_\phi/(au)
+                E = (k/acos\phi)^2
+                F = (f/2NH)^2
+
+        Inputs are:
+            lat   - latitude [degrees]
+            pres  - pressure [hPa]
+            uz    - zonal mean zonal wind, dimension pres x lat [m/s]
+            Tz    - zonal mean temperature, dimension pres x lat [K]
+            k     - zonal wave number [.]
+        Outputs are:
+            n2  - refractive index, dimension pres x lat [.]
+    '''
+    from numpy import cos,sin,deg2rad
+    # some constants
+    Rd    = 287.04 # [J/kg.K = m2/s2.K]
+    cp    = 1004 # [J/kg.K = m2/s2.K]
+    a0    = 6.371e6 # [m]
+    Omega = 2*pi/(24*3600.) # [1/s]
+    H     = 7.e3 # [m]
+
+    latpi = deg2rad(lat)
+
+    #
+    ## term D
+    dqdy = ComputeMeridionalPVGrad(lat,pres,uz,Tz,Rd,cp,a0)
+    D = dqdy/(a0*uz)
+
+    #
+    ## term E
+    latpi = latpi[newaxis,:]
+    E = ( k/(a0*cos(latpi)) )**2
+
+    #
+    ## term F
+    f = 2*Omega*sin(latpi)
+    f2 = f*f
+    N2 = ComputeN2(pres,Tz,H,Rd,cp)
+    H2 = H*H
+    F = f2/(4*N2*H2)
+
+    return a0*a0*(D-E-F)
+
+##############################################################################################
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
 
