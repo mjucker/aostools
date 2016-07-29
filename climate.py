@@ -34,7 +34,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 
         Inputs:
         file        file name, relative path from wkdir
-        climatType  'daily', 'monthly', 'DJF', 'JJA', or any
+        climatType  'daily', 'monthly', 'annual', 'DJF', 'JJA', or any
                     combination of months according to two-letter code
                     Ja Fe Ma Ap My Jn Jl Au Se Oc No De
         wkdir       working directory, in which 'file' must be, and to which the output
@@ -49,6 +49,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     # need to read netCDF and of course do some math
     import netCDF4 as nc
     import numpy as np
+    import os
 
     if climatType == 'DJF':
         climType = 'DeJaFe'
@@ -61,8 +62,10 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     monthList=['Ja','Fe','Ma','Ap','My','Jn','Jl','Au','Se','Oc','No','De']
     calendar_types = ['standard', 'gregorian', 'proleptic_gregorian', 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
 
-
-    ncFile = nc.Dataset(wkdir+file,'r+')
+    if os.isfile(wkdir+file):
+        ncFile = nc.Dataset(wkdir+file,'r+')
+    else:
+        raise IOError(wkdir+file+' does not exist')
 
     time    = ncFile.variables[timeDim][:]
     numTimeSteps = len(time)
