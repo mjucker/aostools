@@ -62,7 +62,8 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     monthList=['Ja','Fe','Ma','Ap','My','Jn','Jl','Au','Se','Oc','No','De']
     calendar_types = ['standard', 'gregorian', 'proleptic_gregorian', 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
 
-    if os.isfile(wkdir+file):
+    if wkdir[-1] != '/': wkdir += '/'
+    if os.path.isfile(wkdir+file):
         ncFile = nc.Dataset(wkdir+file,'r+')
     else:
         raise IOError(wkdir+file+' does not exist')
@@ -95,11 +96,11 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
                 timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
         except:
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
-            timeVar.setncattr('calendar',timeCal)
+            timeVar.calendar = timeCal
     if timeCal not in calendar_types:
         raise ValueError('calender must be in '+str(calendar_types))
     else:
-        print 'Assuming calendar type '+timeCal
+        print 'Calendar type '+timeCal
     #
     # split everything into years,months,days
     date = nc.num2date(time,timeUnits,timeCal)
