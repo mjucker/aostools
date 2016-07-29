@@ -9,11 +9,11 @@
 #
 # compute climatologies
 
-## helper function: check if string contained in upper level string
-def CheckAny(set,string):
+## helper function: check if string contained in list (set) of strings
+def CheckAny(string,set):
     for c in set:
-        if c in string: return 1
-    return 0
+        if c == string: return True
+    return False
 
 ## helper function: return the day of the year instead of full date
 def FindDayOfYear(dateStruc,dateUnits,calendar):
@@ -73,7 +73,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     timeVar = ncFile.variables[timeDim]
     # check the time units
     timeUnits = timeVar.units
-    chck = CheckAny(('seconds','days','months'),timeUnits)
+    chck = CheckAny(timeUnits,('seconds','days','months'))
     if not chck:
         print 'Cannot understand units of time, which is: '+timeUnits
         newUnits = raw_input('Please provide units [seconds,days,months] ')
@@ -91,7 +91,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         try:
             timeCal = str(timeVar.calendar)
-            if not CheckAny(calendar_types,timeCal):
+            if not CheckAny(timeCal,calendar_types):
                 print 'Cannot understand the calendar type, which is: '+timeCal
                 timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
                 timeVar.calendar = timeCal
