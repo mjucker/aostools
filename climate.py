@@ -94,9 +94,9 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
             if not CheckAny(calendar_types,timeCal):
                 print 'Cannot understand the calendar type, which is: '+timeCal
                 timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+                timeVar.calendar = timeCal
         except:
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
-            timeVar.calendar = timeCal
     if timeCal not in calendar_types:
         raise ValueError('calender must be in '+str(calendar_types))
     else:
