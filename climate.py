@@ -825,6 +825,8 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
     ''' Compute the Brunt-Vaisala frequency from zonal mean temperature
          N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+         this is equivalent to
+         N2 = g/\theta d\theta/dz, with p = p0 exp(-z/H)
 
         INPUTS:
             pres  - pressure [hPa]
