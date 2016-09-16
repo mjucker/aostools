@@ -395,7 +395,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
                     outVar = outFile.createVariable(dim, str(inFile.variables[dim].dtype),(dim,))
                     for att in inVar.ncattrs():
                         outVar.setncattr(att,inVar.getncattr(att))
-                outVar[:] = inVar[:]
+                    outVar[:] = inVar[:]
         else:
             outFile = inFile
         outVar = outFile.createVariable('psi_star', 'f4', (time,pfull,lat,))
