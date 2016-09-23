@@ -381,7 +381,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 
     ## write outputfile
     if outFileName is not 'none':
-        print 'Writing psi* into file'
+        print 'Writing file  '+outFileName
         if outFileName is not 'same':
             outFile = nc.Dataset(outFileName,'w')
             for dim in inFile.dimensions:
@@ -391,9 +391,11 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
                     outVar = outFile.createVariable(dim, str(inFile.variables[dim].dtype),(dim,))
                     for att in inVar.ncattrs():
                         outVar.setncattr(att,inVar.getncattr(att))
-                outVar[:] = inVar[:]
+                    outVar[:] = inVar[:]
         else:
             outFile = inFile
+        outVar = outFile.createVariable('psi', 'f4', (time,pfull,lat,))
+        outVar[:] = psi
         outVar = outFile.createVariable('psi_star', 'f4', (time,pfull,lat,))
         outVar[:] = psis
         outFile.close()
