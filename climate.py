@@ -394,7 +394,8 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
                     inVar = inFile.variables[dim]
                     outVar = outFile.createVariable(dim, str(inFile.variables[dim].dtype),(dim,))
                     for att in inVar.ncattrs():
-                        outVar.setncattr(att,inVar.getncattr(att))
+                        if att != '_FillValue': #no fill value in dimensions!
+                            outVar.setncattr(att,inVar.getncattr(att))
                     outVar[:] = inVar[:]
         else:
             outFile = inFile
