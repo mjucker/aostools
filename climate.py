@@ -9,11 +9,11 @@
 #
 # compute climatologies
 
-## helper function: check if string contained in upper level string
-def CheckAny(set,string):
+## helper function: check if string contained in list (set) of strings
+def CheckAny(string,set):
     for c in set:
-        if c in string: return 1
-    return 0
+        if c == string: return True
+    return False
 
 ## helper function: return the day of the year instead of full date
 def FindDayOfYear(dateStruc,dateUnits,calendar):
@@ -34,7 +34,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 
         Inputs:
         file        file name, relative path from wkdir
-        climatType  'daily', 'monthly', 'DJF', 'JJA', or any
+        climatType  'daily', 'monthly', 'annual', 'DJF', 'JJA', or any
                     combination of months according to two-letter code
                     Ja Fe Ma Ap My Jn Jl Au Se Oc No De
         wkdir       working directory, in which 'file' must be, and to which the output
@@ -49,6 +49,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     # need to read netCDF and of course do some math
     import netCDF4 as nc
     import numpy as np
+    import os
 
     if climatType == 'DJF':
         climType = 'DeJaFe'
@@ -61,15 +62,18 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     monthList=['Ja','Fe','Ma','Ap','My','Jn','Jl','Au','Se','Oc','No','De']
     calendar_types = ['standard', 'gregorian', 'proleptic_gregorian', 'noleap', '365_day', '360_day', 'julian', 'all_leap', '366_day']
 
-
-    ncFile = nc.Dataset(wkdir+file,'r+')
+    if wkdir[-1] != '/': wkdir += '/'
+    if os.path.isfile(wkdir+file):
+        ncFile = nc.Dataset(wkdir+file,'r+')
+    else:
+        raise IOError(wkdir+file+' does not exist')
 
     time    = ncFile.variables[timeDim][:]
     numTimeSteps = len(time)
     timeVar = ncFile.variables[timeDim]
     # check the time units
     timeUnits = timeVar.units
-    chck = CheckAny(('seconds','days','months'),timeUnits)
+    chck = CheckAny(timeUnits,('seconds','days','months'))
     if not chck:
         print 'Cannot understand units of time, which is: '+timeUnits
         newUnits = raw_input('Please provide units [seconds,days,months] ')
@@ -87,16 +91,16 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
     else:
         try:
             timeCal = str(timeVar.calendar)
-            if not CheckAny(calendar_types,timeCal):
+            if not CheckAny(timeCal,calendar_types):
                 print 'Cannot understand the calendar type, which is: '+timeCal
                 timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
+                timeVar.calendar = timeCal
         except:
             timeCal = raw_input('Please provide a calendar type from the list '+str(calendar_types)+' ')
-            timeVar.setncattr('calendar',timeCal)
     if timeCal not in calendar_types:
         raise ValueError('calender must be in '+str(calendar_types))
     else:
-        print 'Assuming calendar type '+timeCal
+        print 'Calendar type '+timeCal
     #
     # split everything into years,months,days
     date = nc.num2date(time,timeUnits,timeCal)
@@ -460,6 +464,8 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # prepare pressure derivative
     dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
+    # time mean of d(theta_bar)/dp
+    dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
     # now get wave component
     if wave < 0:
         v = GetAnomaly(v) # v = v'
@@ -816,6 +822,146 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     tmp = trapz(tmp[J,:]*coslat[J][:,newaxis],lat[J],axis=0)/coswgt
     integ = reshape(tmp,shpe[1:])
     return integ
+
+##############################################################################################
+def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
+    ''' Compute the Brunt-Vaisala frequency from zonal mean temperature
+         N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+         this is equivalent to
+         N2 = g/\theta d\theta/dz, with p = p0 exp(-z/H)
+
+        INPUTS:
+            pres  - pressure [hPa]
+            Tz    - zonal mean temperature [K], dim pres x lat
+            H     - scale height [m]
+            Rd    - specific gas constant for dry air
+            cp    - specific heat of air at constant pressure
+        OUTPUTS:
+            N2  - Brunt-Vaisala frequency, [1/s2], dim pres x lat
+    '''
+    from numpy import newaxis,gradient
+    dp   = gradient(pres)[:,newaxis]*100.
+    dTdp = gradient(Tz,dp,1,edge_order=2)[0]
+    p = pres[:,newaxis]*100. # [Pa]
+    N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+    return N2
+
+def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
+    '''Compute the meridional gradient of potential vorticity.
+        This quantity has three terms,
+        q_\phi = A - B + C, where
+                A = 2*Omega*cos\phi
+                B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+                C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+
+        INPUTS:
+            lat  - latitude [degrees]
+            pres - pressure [hPa]
+            uz   - zonal mean zonal wind [m/s], dim pres x lat
+            Tz   - zonal mean temperature [K], dim pres x lat
+        OUTPUTS:
+            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat
+    '''
+    from numpy import pi,cos,sin,newaxis,gradient,deg2rad
+    # some constants
+    Omega = 2*pi/(86400.) # [1/s]
+    p0    = 1e5 #[Pa]
+
+    ## convert to Pa
+    p = pres[:]*100
+    dp = gradient(p)[:,newaxis]
+    p = p[:,newaxis]
+    ## convert to radians
+    latpi = deg2rad(lat)
+    dphi = gradient(latpi)[newaxis,:]
+    latpi = latpi[newaxis,:]
+
+    #
+    ## first term A
+    A = 2*Omega*cos(latpi)
+
+    #
+    ## second term B
+    dudphi = gradient(uz*cos(latpi),1,dphi,edge_order=2)[1]
+    B = dudphi/cos(latpi)/a0
+    B = gradient(B,1,dphi,edge_order=2)[1]
+
+    #
+    ## third term C
+    f = 2*Omega*sin(latpi)
+
+    dudp = gradient(uz,dp,1,edge_order=2)[0]
+
+    kappa = Rd/cp
+    pp0   = (p0/p)**kappa
+    theta = Tz*pp0
+    theta_p = gradient(theta,dp,1,edge_order=2)[0]
+
+    C = p*theta*dudp/(Tz*theta_p)
+    C = gradient(C,dp,1,edge_order=2)[0]
+    C = a0*f*f*C/Rd
+
+    return A-B+C
+
+
+def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
+    '''
+        Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
+        Stationary waves are assumed, ie c=0.
+
+        meridonal PV gradient is
+        q_\phi = A - B + C, where
+                A = 2*Omega*cos\phi
+                B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+                C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+        Total refractive index is
+        n2 = a^2*[D - E - F], where
+                D = q_\phi/(au)
+                E = (k/acos\phi)^2
+                F = (f/2NH)^2
+
+        Inputs are:
+            lat   - latitude [degrees]
+            pres  - pressure [hPa]
+            uz    - zonal mean zonal wind, dimension pres x lat [m/s]
+            Tz    - zonal mean temperature, dimension pres x lat [K]
+            k     - zonal wave number [.]
+            N2const - if not None, assume N2 = const = N2const [1/s2]
+        Outputs are:
+            n2  - refractive index, dimension pres x lat [.]
+    '''
+    from numpy import cos,sin,deg2rad
+    # some constants
+    Rd    = 287.04 # [J/kg.K = m2/s2.K]
+    cp    = 1004 # [J/kg.K = m2/s2.K]
+    a0    = 6.371e6 # [m]
+    Omega = 2*pi/(24*3600.) # [1/s]
+    H     = 7.e3 # [m]
+
+    latpi = deg2rad(lat)
+
+    #
+    ## term D
+    dqdy = ComputeMeridionalPVGrad(lat,pres,uz,Tz,Rd,cp,a0)
+    D = dqdy/(a0*uz)
+
+    #
+    ## term E
+    latpi = latpi[newaxis,:]
+    E = ( k/(a0*cos(latpi)) )**2
+
+    #
+    ## term F
+    f = 2*Omega*sin(latpi)
+    f2 = f*f
+    if N2const is None:
+        N2 = ComputeN2(pres,Tz,H,Rd,cp)
+    else:
+        N2 = N2const
+    H2 = H*H
+    F = f2/(4*N2*H2)
+
+    return a0*a0*(D-E-F)
 
 ##############################################################################################
 def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):

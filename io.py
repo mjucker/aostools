@@ -97,23 +97,34 @@ def CheckDimension(file,dimName,dimVal):
     else:
         return dimName
 
+def MakeTimeDim(timeVar,timeUnits,calendar=None):
+    timeVar.setncattr('long_name','time')
+    timeVar.setncattr('cartesian_axis','T')
+    timeVar.setncattr('units',timeUnits)
+    if calendar:
+        timeVar.setncattr('calendar',calendar)
+    return timeVar
+
 ## create a generic netCDF file that can be read with pv_atmos
 #
-def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimNames=['x','y','z','time'],unlimTime=True,timeUnits='days since 0001-01-01 00:00:00',calendar=None):
+def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimNames=None,timeDim=3,unlimTime=True,timeUnits='days since 0001-01-01 00:00:00',calendar=None):
     """Write netCDF file that is compatible with pv_atmos.
 
         Note that due to differences bewteen python and netCDF dimensions,
+        the dimensions are in reverse order. For instance,
+        dimensions = (x,y,z,t)
         data.shape = (len(t),len(z),len(y),len(x))
 
         Takes one variable, and stores it inside a generic netCDF file.
         If the file already exists, adds the variable to the file.
 
         INPUTS:
-        x,y,z,t     - spatial and time coordinates. If not all used, set to []
+        dimenions   - list of all spatial and time coordinates.
         data        - data to be written. Should be one variable.
         varName     - name of the variable data in the new netCDF file
         outFileName - name of (new) netCDF file. If exists already, variable is added.
         dimNames    - names of the output dimensions
+        timeDim     - index of the time variable
         unlimTime   - whether time dimension should be unlimited/appendable
         timeUnits   - units of time dimension
         calendar    - calendar of time dimension
@@ -123,6 +134,8 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
     import netCDF4 as nc
     import os.path as op
 
+    letters = ['a','b','c','d','e','f','g','h','i','k','l','m','n']
+
     dims = ()
     if op.isfile(outFileName):
         mode = 'r+'
@@ -131,58 +144,28 @@ def WriteGenericNc(x, y, z, t, data, varName, outFileName='ncGeneric.nc',dimName
         mode = 'w'
         text = 'Created'
     outFile = nc.Dataset(outFileName, mode, format='NETCDF3_64BIT')
-    # check if dimensions x,y,z already exist, and add them if not
-    if len(x) > 0:
-        checkDim = CheckDimension(outFile,dimNames[0],x)
+    # check if dimensions already exist, and add them if not
+    for d in range(len(dimensions)):
+        dim = dimensions[d]
+        try:
+            name = dimNames[d]
+        except:
+            name = letters[d]
+        checkDim = CheckDimension(outFile,name,dim)
         if checkDim == 'exists':
-            checkDim = dimNames[0]
+            checkDim = name
         else:
-            xD = outFile.createDimension(checkDim,len(x))
-            xV = outFile.createVariable(checkDim,'f4', (checkDim,))
-            xV[:] = x
-            xV.setncattr('long_name','X axis')
-            xV.setncattr('cartesian_axis','X')
-        dims = (checkDim,) + dims
-    if len(y) > 0:
-        checkDim = CheckDimension(outFile,dimNames[1],y)
-        if checkDim == 'exists':
-            checkDim = dimNames[1]
-        else:
-            yD = outFile.createDimension(checkDim,len(y))
-            yV = outFile.createVariable(checkDim,'f4', (checkDim,))
-            yV[:] = y
-            yV.setncattr('long_name','Y axis')
-            yV.setncattr('cartesian_axis','Y')
-        dims = (checkDim,) + dims
-    if len(z) > 0:
-        checkDim = CheckDimension(outFile,dimNames[2],z)
-        if checkDim == 'exists':
-            checkDim = dimNames[2]
-        else:
-            zD = outFile.createDimension(checkDim,len(z))
-            zV = outFile.createVariable(checkDim,'f4', (checkDim,))
-            zV[:] = z
-            zV.setncattr('long_name','Z axis')
-            zV.setncattr('cartesian_axis','Z')
-        dims = (checkDim,) + dims
-    if len(t) > 0:
-        checkDim = CheckDimension(outFile,dimNames[3],t)
-        if checkDim == 'exists':
-            checkDim = dimNames[3]
-        else:
-            if unlimTime:
-                tlen = 0
+            if timeDim == d and unlimTime:
+                dlen = 0
             else:
-                tlen = len(t)
-            tD = outFile.createDimension(checkDim,tlen)
-            tV = outFile.createVariable(checkDim,'f4', (checkDim,))
-            tV[:] = t
-            tV.setncattr('long_name','time')
-            tV.setncattr('cartesian_axis','T')
-            tV.setncattr('units',timeUnits)
-            if calendar:
-                tV.setncattr('calendar',calendar)
+                dlen = len(dim)
+            xD = outFile.createDimension(checkDim,dlen)
+            xV = outFile.createVariable(checkDim,'f4', (checkDim,))
+            xV[:] = dim
+            if timeDim == d:
+                xV = MakeTimeDim(xV,timeUnits,calendar)
         dims = (checkDim,) + dims
+    # add the variable
     vOut = outFile.createVariable(varName,'f4',dims)
     vOut[:] = data
     outFile.close()
