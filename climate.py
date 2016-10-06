@@ -12,7 +12,7 @@
 ## helper function: check if string contained in list (set) of strings
 def CheckAny(string,set):
     for c in set:
-        if c == string: return True
+        if c in string: return True
     return False
 
 ## helper function: return the day of the year instead of full date
