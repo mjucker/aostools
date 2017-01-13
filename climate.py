@@ -858,24 +858,50 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
         INPUTS:
             lat  - latitude [degrees]
             pres - pressure [hPa]
-            uz   - zonal mean zonal wind [m/s], dim pres x lat
-            Tz   - zonal mean temperature [K], dim pres x lat
+            uz   - zonal mean zonal wind [m/s], dim pres x lat OR time x pres x lat
+            Tz   - zonal mean temperature [K], dim pres x lat OR time x pres x lat
         OUTPUTS:
-            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat
+            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR time x pres x lat
     '''
     from numpy import pi,cos,sin,newaxis,gradient,deg2rad
     # some constants
     Omega = 2*pi/(86400.) # [1/s]
     p0    = 1e5 #[Pa]
 
+    ## make sure we have the dimesions as expected
+    if uz.shape != Tz.shape:
+        raise ValueError('UZ AND TZ DO NOT HAVE THE SAME SHAPE')
+    elif len(uz.shape) > 3:
+        raise ValueError('TOO MANY DIMENSIONS IN UZ AND TZ')
+    def FlexiGradPhi(data,dphi):
+        if len(data.shape) == 3:
+            grad = gradient(data,1,1,dphi,edge_order=2)[2]
+        else:
+            grad = gradient(data,1,dphi,edge_order=2)[1]
+        return grad
+    def FlexiGradP(data,dp):
+        if len(data.shape) == 3:
+            grad = gradient(data,1,dp,1,edge_order=2)[1]
+        else:
+            grad = gradient(data,dp,1,edge_order=2)[0]
+        return grad
+
     ## convert to Pa
     p = pres[:]*100
-    dp = gradient(p)[:,newaxis]
-    p = p[:,newaxis]
+    if len(uz.shape) == 3:
+        dp = gradient(p)[newaxis,:,newaxis]
+        p  = p[newaxis,:,newaxis]
+    else:
+        dp = gradient(p)[:,newaxis]
+        p = p[:,newaxis]
     ## convert to radians
     latpi = deg2rad(lat)
-    dphi = gradient(latpi)[newaxis,:]
-    latpi = latpi[newaxis,:]
+    if len(uz.shape) == 3:
+        dphi = gradient(latpi)[newaxis,newaxis,:]
+        latpi= latpi[newaxis,newaxis,:]
+    else:
+        dphi = gradient(latpi)[newaxis,:]
+        latpi = latpi[newaxis,:]
 
     #
     ## first term A
@@ -883,20 +909,24 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
 
     #
     ## second term B
-    dudphi = gradient(uz*cos(latpi),1,dphi,edge_order=2)[1]
+    dudphi = FlexiGradPhi(uz*cos(latpi),dphi)
+    # dudphi = gradient(uz*cos(latpi),1,dphi,edge_order=2)[1]
     B = dudphi/cos(latpi)/a0
-    B = gradient(B,1,dphi,edge_order=2)[1]
+    B = FlexiGradPhi(B,dphi)
+    # B = gradient(B,1,dphi,edge_order=2)[1]
 
     #
     ## third term C
     f = 2*Omega*sin(latpi)
 
-    dudp = gradient(uz,dp,1,edge_order=2)[0]
+    dudp = FlexiGradP(uz,dp)
+    # dudp = gradient(uz,dp,1,edge_order=2)[0]
 
     kappa = Rd/cp
     pp0   = (p0/p)**kappa
     theta = Tz*pp0
-    theta_p = gradient(theta,dp,1,edge_order=2)[0]
+    theta_p = FlexiGradP(theta,dp)
+    # theta_p = gradient(theta,dp,1,edge_order=2)[0]
 
     C = p*theta*dudp/(Tz*theta_p)
     C = gradient(C,dp,1,edge_order=2)[0]
