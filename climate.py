@@ -929,7 +929,8 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
     # theta_p = gradient(theta,dp,1,edge_order=2)[0]
 
     C = p*theta*dudp/(Tz*theta_p)
-    C = gradient(C,dp,1,edge_order=2)[0]
+    C = FlexiGradP(C,dp)
+    # C = gradient(C,dp,1,edge_order=2)[0]
     C = a0*f*f*C/Rd
 
     return A-B+C
