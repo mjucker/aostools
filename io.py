@@ -107,7 +107,7 @@ def MakeTimeDim(timeVar,timeUnits,calendar=None):
 
 ## create a generic netCDF file that can be read with pv_atmos
 #
-def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimNames=None,timeDim=3,unlimTime=True,timeUnits='days since 0001-01-01 00:00:00',calendar=None):
+def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimNames=None,timeDim=None,unlimTime=True,timeUnits='days since 0001-01-01 00:00:00',calendar=None,group=None,zlib=False,least_digit=None):
     """Write netCDF file that is compatible with pv_atmos.
 
         Note that due to differences bewteen python and netCDF dimensions,
@@ -128,6 +128,9 @@ def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimName
         unlimTime   - whether time dimension should be unlimited/appendable
         timeUnits   - units of time dimension
         calendar    - calendar of time dimension
+        group       - if not None, must be string with name of groupe to write to
+        zlib        - use zlib compression
+        least_digit - further compress using least_significant_digit
         NOTE: if outFileName already exists, the dimensions in the file have to
         correspond to the dimensions given as inputs.
         """
@@ -143,7 +146,15 @@ def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimName
     else:
         mode = 'w'
         text = 'Created'
-    outFile = nc.Dataset(outFileName, mode, format='NETCDF3_64BIT')
+    # outFile = nc.Dataset(outFileName, mode, format='NETCDF3_64BIT')
+    outFile = nc.Dataset(outFileName, mode, format='NETCDF4')
+    # check if group already exists, if not, create
+    if group is not None:
+        if group not in outFile.groups.keys():
+            outFile.createGroup(group)
+        group = '/'+group+'/'
+    else:
+        group = ''
     # check if dimensions already exist, and add them if not
     for d in range(len(dimensions)):
         dim = dimensions[d]
@@ -166,7 +177,10 @@ def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimName
                 xV = MakeTimeDim(xV,timeUnits,calendar)
         dims = (checkDim,) + dims
     # add the variable
-    vOut = outFile.createVariable(varName,'f4',dims)
+    if least_digit is None:
+        vOut = outFile.createVariable(group+varName,'f4',dims,zlib=zlib)
+    else:
+        vOut = outFile.createVariable(group+varName,'f4',dims,zlib=zlib,least_significant_digit=least_digit)
     vOut[:] = data
     outFile.close()
     print text+' file '+outFileName
@@ -233,10 +247,17 @@ def ReadFile(fileName, show='silent', mode='r'):
     file=nc.Dataset(fileName,mode)
     if show != 'silent':
         print 'All variables:',file.variables.keys()
+        for g in file.groups.keys():
+            print '              ','group '+g+':'
+            print '              ',file.groups[g].variables.keys()
     if show == 'full':
         for v in file.variables.keys():
             if v not in file.dimensions:
                 print file.variables[v]
+        for g in file.groups.keys():
+            for v in file.groups[g].variables.keys():
+                if v not in file.dimensions:
+                    print g+'/'+file.variables[v]
     return file
 
 
