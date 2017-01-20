@@ -858,10 +858,10 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
         INPUTS:
             lat  - latitude [degrees]
             pres - pressure [hPa]
-            uz   - zonal mean zonal wind [m/s], dim pres x lat OR time x pres x lat
-            Tz   - zonal mean temperature [K], dim pres x lat OR time x pres x lat
+            uz   - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
+            Tz   - zonal mean temperature [K], dim pres x lat OR N x pres x lat
         OUTPUTS:
-            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR time x pres x lat
+            q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR N x pres x lat
     '''
     from numpy import pi,cos,sin,newaxis,gradient,deg2rad
     # some constants
