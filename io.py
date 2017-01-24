@@ -1,10 +1,7 @@
  #!/usr/bin/python
 # Filename: io.py
 #
-# Code by Martin Jucker, distributed under an MIT License
-# Any publication benefitting from this piece of code should cite
-# Jucker, M 2014. Scientific Visualisation of Atmospheric Data with ParaView.
-# Journal of Open Research Software 2(1):e4, DOI: http://dx.doi.org/10.5334/jors.al
+# Code by Martin Jucker, distributed under an GPLv3 License
 #
 # This file provides helper functions that can be useful as pre-viz-processing of files and data
 
