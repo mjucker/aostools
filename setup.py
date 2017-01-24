@@ -1,12 +1,24 @@
-from distutils.core import setup
+#from distutils.core import setup
+import os
+from setuptools import setup
+
+def read(fname):
+	return open(os.path.join(os.path.dirname(__file__),fname)).read()
+
 setup(name='aostools',
       version='2.0',
       description='Helper functions for postprocessing and analysis of netCDF data',
-      long_description='',
+      long_description=read('README.md'),
       author='Martin Jucker',
       author_email='coding@martinjucker.com',
-      license='MIT',
+      license='GPLv3',
       url='https://github.com/mjucker/aostools',
       package_dir={'aostools': ''},
       packages=['aostools'],
+      install_requires=[
+	'os',
+	'numpy',
+	'netcdf4-python',
+	],
+      zip_safe=False
       )
