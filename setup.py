@@ -1,6 +1,6 @@
 from distutils.core import setup
 setup(name='aostools',
-      version='1.2',
+      version='2.0',
       description='Helper functions for postprocessing and analysis of netCDF data',
       long_description='',
       author='Martin Jucker',
