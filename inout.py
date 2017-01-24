@@ -1,5 +1,5 @@
  #!/usr/bin/python
-# Filename: io.py
+# Filename: inout.py
 #
 # Code by Martin Jucker, distributed under an GPLv3 License
 #
