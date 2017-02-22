@@ -1179,10 +1179,14 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
     # pressure levels
     if pres is None:
         temp = tempIn[:,np.newaxis,:]
-        K = 0
+        K = [0]
     else:
         temp = tempIn
         K = find(pres >= minPres)
+        if len(K) == 1:
+            temp = tempIn[:,K,:]
+            K = [0]
+            pres = None
     #
     T = dict()
     for H in ['S','N']:
@@ -1194,9 +1198,10 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
     dT = dict()
     for H in ['S','N']:
         if pres is None:
-            tmp = T[H]
+            tmp = np.squeeze(T[H])
         else:
-            tmp = trapz(T[H],pres[K],axis=1)/trapz(pres[K])
+            tmp = np.trapz(T[H],pres[K],axis=1)
+            tmp = tmp/np.trapz(np.ones_like(pres[K]),pres[K])
         # zero index is closer to tropics
         #  define bariclinicity as -dyT
         dT[H] = tmp[:,0] - tmp[:,1]

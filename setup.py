@@ -6,7 +6,7 @@ def read(fname):
 	return open(os.path.join(os.path.dirname(__file__),fname)).read()
 
 setup(name='aostools',
-      version='2.0',
+      version='2.1',
       description='Helper functions for postprocessing and analysis of netCDF data',
       long_description=read('README.md'),
       author='Martin Jucker',
