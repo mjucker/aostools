@@ -6,7 +6,7 @@ def read(fname):
 	return open(os.path.join(os.path.dirname(__file__),fname)).read()
 
 setup(name='aostools',
-      version='2.1.1',
+      version='2.1.2',
       description='Helper functions for postprocessing and analysis of netCDF data',
       long_description=read('README.md'),
       author='Martin Jucker',
@@ -17,7 +17,7 @@ setup(name='aostools',
       packages=['aostools'],
       install_requires=[
 	'numpy',
-	'netcdf4-python',
+	'netCDF4',
 	],
       zip_safe=False
       )
