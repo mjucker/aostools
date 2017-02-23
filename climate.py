@@ -547,11 +547,10 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
             AM     - The annular mode, size time x pres
     """
     import numpy as np
-    from matplotlib.mlab import find
     #
     AM = np.empty((len(time),len(pres)))
     AM[:] = np.nan
-    j_tmp = find(lat > 20)
+    j_tmp = np.where(lat > 20)[0]
     coslat = np.cos(lat*np.pi/180.)
     negCos = (coslat < 0.)
     coslat[negCos] = 0.
@@ -811,13 +810,13 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     OUTPUTS:
       integ- averaged data
     """
-    from numpy import trapz,cos,prod,reshape,newaxis,pi
+    from numpy import trapz,cos,prod,reshape,newaxis,pi,where
     #get data into the correct shape
     tmp = AxRoll(data,axis)
     shpe= tmp.shape
     tmp = reshape(tmp,(shpe[0],prod(shpe[1:])))
     #cosine weighting
-    J = find((lat>=lim)*(lat<=mx))
+    J = where((lat>=lim)*(lat<=mx))[0]
     coslat = cos(lat*pi/180.)**cosp
     coswgt = trapz(coslat[J],lat[J])
     tmp = trapz(tmp[J,:]*coslat[J][:,newaxis],lat[J],axis=0)/coswgt
@@ -1164,13 +1163,13 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
 
     numTimeSteps = tempIn.shape[0]
     # get important meridional grid points
-    N = find( (lat>= minLat)*(lat<= maxLat) )
+    N = np.where( (lat>= minLat)*(lat<= maxLat) )[0]
     #  make sure first index is closer to pole
     if lat[N[0]] < lat[N[-1]]:
         latN = [N[0],N[-1]]
     else:
         latN = [N[-1],N[0]]
-    S = find( (lat<=-minLat)*(lat>=-maxLat) )
+    S = np.where( (lat<=-minLat)*(lat>=-maxLat) )[0]
     #  make sure first index is closer to pole
     if lat[S[0]] > lat[S[-1]]:
         latS = [S[0],S[-1]]
@@ -1182,7 +1181,7 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
         K = [0]
     else:
         temp = tempIn
-        K = find(pres >= minPres)
+        K = np.where(pres >= minPres)[0]
         if len(K) == 1:
             temp = tempIn[:,K,:]
             K = [0]
