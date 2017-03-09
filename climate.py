@@ -847,7 +847,8 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
     N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
     return N2
 
-def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
+##############################################################################################
+def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, component='ABC'):
     '''Compute the meridional gradient of potential vorticity.
         This quantity has three terms,
         q_\phi = A - B + C, where
@@ -856,14 +857,19 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
                 C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
 
         INPUTS:
-            lat  - latitude [degrees]
-            pres - pressure [hPa]
-            uz   - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
-            Tz   - zonal mean temperature [K], dim pres x lat OR N x pres x lat
+            lat       - latitude [degrees]
+            pres      - pressure [hPa]
+            uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
+            Tz        - zonal mean temperature [K], dim pres x lat OR N x pres x lat
+            component - option to only return one, two, or all of the components.
+                         Add a letter for each of the components 'A', 'B', 'C'.
+                         Note: As B has a minus sign in q_\phi, option 'B' returns -B
         OUTPUTS:
             q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR N x pres x lat
     '''
-    from numpy import pi,cos,sin,newaxis,gradient,deg2rad
+    if not ('A' in component)+('B' in component)+('C' in component):
+        raise ValueError('component has to contain A,B and/or C, but got '+component)
+    from numpy import pi,cos,sin,newaxis,gradient,deg2rad,zeros
     # some constants
     Omega = 2*pi/(86400.) # [1/s]
     p0    = 1e5 #[Pa]
@@ -904,36 +910,38 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6):
         latpi = latpi[newaxis,:]
 
     #
+    result = zeros(uz.shape)
     ## first term A
-    A = 2*Omega*cos(latpi)
-
+    if 'A' in component:
+        A = 2*Omega*cos(latpi)
+        result += A
+    
     #
     ## second term B
-    dudphi = FlexiGradPhi(uz*cos(latpi),dphi)
-    # dudphi = gradient(uz*cos(latpi),1,dphi,edge_order=2)[1]
-    B = dudphi/cos(latpi)/a0
-    B = FlexiGradPhi(B,dphi)
-    # B = gradient(B,1,dphi,edge_order=2)[1]
-
+    if 'B' in component:
+        dudphi = FlexiGradPhi(uz*cos(latpi),dphi)
+        B = dudphi/cos(latpi)/a0
+        B = FlexiGradPhi(B,dphi)
+        result -= B
+    
     #
     ## third term C
-    f = 2*Omega*sin(latpi)
-
-    dudp = FlexiGradP(uz,dp)
-    # dudp = gradient(uz,dp,1,edge_order=2)[0]
-
-    kappa = Rd/cp
-    pp0   = (p0/p)**kappa
-    theta = Tz*pp0
-    theta_p = FlexiGradP(theta,dp)
-    # theta_p = gradient(theta,dp,1,edge_order=2)[0]
-
-    C = p*theta*dudp/(Tz*theta_p)
-    C = FlexiGradP(C,dp)
-    # C = gradient(C,dp,1,edge_order=2)[0]
-    C = a0*f*f*C/Rd
-
-    return A-B+C
+    if 'C' in component:
+        f = 2*Omega*sin(latpi)
+        
+        dudp = FlexiGradP(uz,dp)
+        
+        kappa = Rd/cp
+        pp0   = (p0/p)**kappa
+        theta = Tz*pp0
+        theta_p = FlexiGradP(theta,dp)
+        
+        C = p*theta*dudp/(Tz*theta_p)
+        C = FlexiGradP(C,dp)
+        C = a0*f*f*C/Rd
+        result += C
+    #
+    return result
 
 
 def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
