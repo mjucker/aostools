@@ -463,7 +463,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     v_bar = np.nanmean(v,axis=-1)
     t_bar = np.nanmean(t,axis=-1) # t_bar = theta_bar
     # prepare pressure derivative
-    dthdp = np.gradient(t_bar,1,dp,1,edge_order=2)[1] # dthdp = d(theta_bar)/dp
+    dthdp = np.gradient(t_bar,edge_order=2)[1]/dp # dthdp = d(theta_bar)/dp
     dthdp[dthdp==0] = np.NaN
     # time mean of d(theta_bar)/dp
     dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
@@ -626,7 +626,7 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
     # t_bar = bar(v'Th'/(dTh_bar/dp))
     #
     dp  = np.gradient(p)[np.newaxis,:,np.newaxis]
-    vstar = v_bar - np.gradient(t_bar,1,dp,1,edge_order=2)[1]
+    vstar = v_bar - np.gradient(t_bar,edge_order=2)[1]/dp
 
     return vstar
 
@@ -686,7 +686,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
     	# weigh v'T' by cos\phi
     	vt_bar[w,:] = vt_bar[w,:]*coslat
     	# get the meridional derivative
-    	vt_bar[w,:] = np.gradient(vt_bar[w,:],1,1,dphi,edge_order=2)[-1]
+    	vt_bar[w,:] = np.gradient(vt_bar[w,:],edge_order=2)[-1]/dphi
     # compute zonal mean upwelling
     w_bar = np.nanmean(data[omega],axis=-1)
     # put it all together
@@ -741,7 +741,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     # absolute vorticity
     if do_ubar:
         ubar = np.nanmean(u,axis=-1)
-        fhat = R*gradient(ubar*coslat,1,1,dphi,edge_order=2)[-1]
+        fhat = R*gradient(ubar*coslat,edge_order=2)[-1]/dphi
     else:
         fhat = 0.
     fhat = f - fhat # [1/s]
@@ -759,7 +759,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #
     ## compute the horizontal component
     if do_ubar:
-        shear = gradient(ubar,1,dp,1,edge_order=2)[1] # [m/s.hPa]
+        shear = gradient(ubar,edge_order=2)[1]/dp # [m/s.hPa]
     else:
         shear = 0.
     ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
@@ -783,12 +783,12 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #    where a*cosphi comes from using cartesian, and cosphi from the derivative
     # With some algebra, we get
     #  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
-    div1 = coslat*gradient(ep1_cart,1,1,dphi,edge_order=2)[-1] - 2*sinlat*ep1_cart
+    div1 = coslat*gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
     # Now, we want acceleration, which is div(F)/a.cosphi [m/s2]
     div1 = R*div1 # [m/s2]
     #
     # Similarly, we want acceleration = 1/a.coshpi*a.cosphi*d/dp[ep2_cart] [m/s2]
-    div2 = gradient(ep2_cart,1,dp,1,edge_order=2)[1] # [m/s2]
+    div2 = gradient(ep2_cart,edge_order=2)[1]/dp # [m/s2]
     #
     # convert to m/s/day
     div1 = div1*86400
@@ -841,7 +841,7 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
     '''
     from numpy import newaxis,gradient
     dp   = gradient(pres)[:,newaxis]*100.
-    dTdp = gradient(Tz,dp,1,edge_order=2)[0]
+    dTdp = gradient(Tz,edge_order=2)[0]/dp
     p = pres[:,newaxis]*100. # [Pa]
     N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
     return N2
@@ -880,16 +880,16 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
         raise ValueError('TOO MANY DIMENSIONS IN UZ AND TZ')
     def FlexiGradPhi(data,dphi):
         if len(data.shape) == 3:
-            grad = gradient(data,1,1,dphi,edge_order=2)[2]
+            grad = gradient(data,edge_order=2)[2]
         else:
-            grad = gradient(data,1,dphi,edge_order=2)[1]
-        return grad
+            grad = gradient(data,edge_order=2)[1]
+        return grad/dphi
     def FlexiGradP(data,dp):
         if len(data.shape) == 3:
-            grad = gradient(data,1,dp,1,edge_order=2)[1]
+            grad = gradient(data,edge_order=2)[1]
         else:
-            grad = gradient(data,dp,1,edge_order=2)[0]
-        return grad
+            grad = gradient(data,edge_order=2)[0]
+        return grad/dp
 
     ## convert to Pa
     p = pres[:]*100
