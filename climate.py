@@ -849,6 +849,7 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
 ##############################################################################################
 def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, component='ABC'):
     '''Compute the meridional gradient of potential vorticity.
+        Computed following Simpson et al JAS (2009) DOI 10.1175/2008JAS2758.1.
         This quantity has three terms,
         q_\phi = A - B + C, where
                 A = 2*Omega*cos\phi

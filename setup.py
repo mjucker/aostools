@@ -7,8 +7,9 @@ def read(fname):
 
 setup(name='aostools',
       version='2.1.4',
-      description='Helper functions for postprocessing and analysis of netCDF data',
-      long_description=read('README.md'),
+      description='Helper functions for scientific postprocessing and analysis of netCDF data',
+      long_description=read('readme_pypi'),
+      keywords='atmospheric oceanic science netcdf analysis tools',
       author='Martin Jucker',
       author_email='coding@martinjucker.com',
       license='GPLv3',
