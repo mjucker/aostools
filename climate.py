@@ -808,7 +808,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
       mx   - stopping latitude to average
       cosp - power of cosine weighting
     OUTPUTS:
-      integ- averaged data
+      integ- averaged data, length N
     """
     from numpy import trapz,cos,prod,reshape,newaxis,pi,where
     #get data into the correct shape
