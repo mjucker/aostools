@@ -517,7 +517,7 @@ def eof(X,n=1):
     # get the first n modes, in physical units
     #  we can either project the data onto the principal component, F*V
     #  or multiply u*s. This is the same, as U*S*V.H*V = U*S
-    EOF = np.dot(u[:,:n],diag(s)[:n,:n])
+    EOF = np.dot(u[:,:n],np.diag(s)[:n,:n])
     # time evolution is in v
     PC  = v[:n,:]
     # EOF wants \lambda = the squares of the eigenvalues,
@@ -525,7 +525,7 @@ def eof(X,n=1):
     s = s*s
     E   = s[:n]/sum(s)
 
-    return EOF,PC,E,u[:,:n],sqrt(s[:n]),v.T[:,:n]
+    return EOF,PC,E,u[:,:n],np.sqrt(s[:n]),v.T[:,:n]
 
 
 ##############################################################################################
