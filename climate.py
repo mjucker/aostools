@@ -412,7 +412,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 
 ##############################################################################################
 ## helper functions
-def update_progress(progress,barLength=10):
+def update_progress(progress,barLength=10,info=None):
     import sys
     status = ""
     if isinstance(progress, int):
@@ -425,10 +425,17 @@ def update_progress(progress,barLength=10):
         status = "Halt...\r\n"
     if progress >= 1:
         progress = 1
-        status = '\r\n'
+        status = "\r" #"\r\n"
     #status = "Done...\r\n"
     block = int(round(barLength*progress))
-    text = "\r[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
+    if info is not None:
+        text = '\r'+info+': '
+    else:
+        text = '\r'
+    if progress == 1:
+        text = "\r{0}   {1}     {2}".format(" "*len(info)," "*barLength,status)
+    else:
+        text += "[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
     sys.stdout.write(text)
     sys.stdout.flush()
 #
