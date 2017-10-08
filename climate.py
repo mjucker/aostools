@@ -475,14 +475,16 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     # time mean of d(theta_bar)/dp
     dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
     # now get wave component
-    if wave < 0:
+    if isinstance(wave,list):
+        t = np.sum(GetWaves(v,t,wave=-1,do_anomaly=True)[:,:,:,wave],axis=-1)
+    elif wave < 0:
         v = GetAnomaly(v) # v = v'
         t = GetAnomaly(t) # t = t'
         t = np.nanmean(v*t,axis=-1) # t = bar(v'Th')
-        t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
+        #t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     else:
         t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
-        t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
+    t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     #
     return v_bar,t_bar
 
@@ -720,14 +722,14 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
       t    - temperature, shape(time,p,lat,lon) [K]
       w    - pressure velocity, optional, shape(time,p,lat,lon) [hPa/s]
       do_ubar - compute shear and vorticity correction? optional
-      wave - only include this wave number. all if <0. optional
+      wave - only include this wave number. all if <0, sum over waves if a list. optional
     OUTPUTS:
       ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
       ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
       div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
       div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
     """
-    from numpy import pi,cos,sin,newaxis,gradient
+    from numpy import pi,cos,sin,newaxis,gradient,nanmean,sum
     # some constants
     Rd    = 287.04
     cp    = 1004
@@ -747,7 +749,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #
     # absolute vorticity
     if do_ubar:
-        ubar = np.nanmean(u,axis=-1)
+        ubar = nanmean(u,axis=-1)
         fhat = R*gradient(ubar*coslat,edge_order=2)[-1]/dphi
     else:
         fhat = 0.
@@ -759,8 +761,10 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     ## get zonal anomalies
     u = GetAnomaly(u)
     v = GetAnomaly(v)
-    if wave<0:
-        upvp = np.nanmean(u*v,axis=-1)
+    if isinstance(wave,list):
+        upvp = sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
+    elif wave<0:
+        upvp = nanmean(u*v,axis=-1)
     else:
         upvp = GetWaves(u,v,wave=wave)
     #
@@ -777,8 +781,10 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
     if w is not None:
         w = GetAnomaly(w) # w = w' [hPa/s]
-        if wave<0:
-            w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
+        if isinstance(wave,list):
+            w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
+        elif wave<0:
+            w = nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
         else:
             w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
         ep2_cart = ep2_cart - w # [m.hPa/s2]
@@ -1028,7 +1034,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	OUTPUTS:
 		xym        - data in Fourier space
 	"""
-	from numpy import fft,squeeze,real,zeros,zeros_like
+	from numpy import fft,squeeze,real,zeros,zeros_like,sum
 	initShape = x.shape
 	x = AxRoll(x,axis)
 	# compute anomalies
