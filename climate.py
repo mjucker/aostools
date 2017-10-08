@@ -481,7 +481,6 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
         v = GetAnomaly(v) # v = v'
         t = GetAnomaly(t) # t = t'
         t = np.nanmean(v*t,axis=-1) # t = bar(v'Th')
-        #t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
     else:
         t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
     t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
