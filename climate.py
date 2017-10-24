@@ -1117,32 +1117,46 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
        cosm1   = 1/coslat
        gemfac  = rad2deg/a0
     #
+    ndims = len(shape(data))
     if mode is 'm2lat':
         out = data*gemfac
     elif mode is 'lat2m':
         out = data/gemfac
     elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
-        tmp = AxRoll(data,axis)
+        if ndims > 1:
+            tmp = AxRoll(data,axis)
         out = np.zeros_like(tmp)
     else:
         raise ValueError("mode not recognized")
     if mode is 'm2lon':
-        for l in range(out.shape[0]):
-            out[l,:] = tmp[l,:]*cosm1
+        if ndims > 1:
+            for l in range(out.shape[0]):
+                out[l,:] = tmp[l,:]*cosm1
+        else:
+            out = tmp*cosm1
         out = out*gemfac
         out = AxRoll(out,axis,'i')
     elif mode is 'lon2m':
-        for l in range(out.shape[0]):
-            out[l,:] = tmp[l,:]*coslat
+        if ndims > 1:
+            for l in range(out.shape[0]):
+                out[l,:] = tmp[l,:]*coslat
+        else:
+            out = out*coslat
         out = out/gemfac
     elif mode is 'm2hPa':
-        for p in range(out.shape[0]):
-            out[p,:] = -coord[p]*tmp[p,:]
+        if ndims > 1:
+            for p in range(out.shape[0]):
+                out[p,:] = -coord[p]*tmp[p,:]
+        else:
+            out = -coord*tmp
         out = out/H
         out = AxRoll(out,axis,'i')
     elif mode is 'hPa2m':
-        for p in range(out.shape[0]):
-            out[p,:] = -coord[p]/tmp[p,:]
+        if ndims > 1:
+            for p in range(out.shape[0]):
+                out[p,:] = -coord[p]/tmp[p,:]
+        else:
+            out = -coord/tmp
         out[tmp==0] = NaN
         out = out*H
         out = AxRoll(out,axis,'i')
