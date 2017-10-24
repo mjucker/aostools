@@ -7,7 +7,8 @@
 
 ############################################################################################
 #
-# compute climatologies
+import numpy as np
+from numba import jit
 
 ## helper function: check if string contained in list (set) of strings
 def CheckAny(string,set):
@@ -48,7 +49,6 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 
     # need to read netCDF and of course do some math
     import netCDF4 as nc
-    import numpy as np
     import os
 
     if climatType == 'DJF':
@@ -216,7 +216,6 @@ def AxRoll(x,ax,start_mode=0):
     """Re-arrange array x so that axis 'ax' is first dimension.
         Undo this if start_mode=='i'
     """
-    from numpy import rollaxis
     if isinstance(start_mode, basestring):
         mode = start_mode
     else:
@@ -228,9 +227,9 @@ def AxRoll(x,ax,start_mode=0):
         n = ax
     #
     if mode is 'f':
-        y = rollaxis(x,n,start_mode)
+        y = np.rollaxis(x,n,start_mode)
     elif mode is 'i':
-        y = rollaxis(x,0,n+1)
+        y = np.rollaxis(x,0,n+1)
     else:
         raise Exception("mode must be 'f' for forward or 'i' for inverse")
     return y
@@ -246,7 +245,6 @@ def ComputeSaturationMixingRatio(T, p, pDim):
         OUTPUTS:
             qsat - saturation water mixing ratio [kg/kg]
     """
-    import numpy as np
     #some constants we need
     Rd = 287.04
     Rv = 461.5
@@ -286,7 +284,6 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
     """
 
     import netCDF4 as nc
-    import numpy as np
     # relative humidity is then q/qsat*100[->%]
 
     # read input file
@@ -331,7 +328,6 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
             psis        - residual stream function, as a function of time
     """
     import netCDF4 as nc
-    import numpy as np
     from scipy.integrate import cumtrapz
     import os
 
@@ -456,7 +452,6 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
             v_bar - zonal mean meridional wind [v]
             t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
     """
-    import numpy as np
     #
     # some constants
     kappa = 2./7
@@ -505,7 +500,6 @@ def eof(X,n=1):
             s   - variances
             v   - temporal modes
     """
-    import numpy as np
     import scipy.signal as sg
 
     # find out which dimension is time
@@ -554,7 +548,6 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
         OUTPUT:
             AM     - The annular mode, size time x pres
     """
-    import numpy as np
     #
     AM = np.empty((len(time),len(pres)))
     AM[:] = np.nan
@@ -608,7 +601,6 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
             vstar       - residual meridional wind, as a function of time
     """
     import netCDF4 as nc
-    import numpy as np
 
     a0    = 6371000
     g     = 9.81
@@ -663,7 +655,6 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
             residual pressure velocity, time x pfull x lat [and waves] [hPa/s]
     """
     import netCDF4 as nc
-    import numpy as np
 
     a0    = 6371000.
 
@@ -728,28 +719,27 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
       div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
       div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
     """
-    from numpy import pi,cos,sin,newaxis,gradient,nanmean,sum
     # some constants
     Rd    = 287.04
     cp    = 1004
     kappa = Rd/cp
     p0    = 1000
-    Omega = 2*pi/(24*3600.) # [1/s]
+    Omega = 2*np.pi/(24*3600.) # [1/s]
     a0    = 6.371e6
     # geometry
-    pilat = lat*pi/180
-    dphi  = gradient(pilat)[newaxis,newaxis,:]
-    coslat= cos(pilat)[newaxis,newaxis,:]
-    sinlat= sin(pilat)[newaxis,newaxis,:]
+    pilat = lat*np.pi/180
+    dphi  = np.gradient(pilat)[np.newaxis,np.newaxis,:]
+    coslat= np.cos(pilat)[np.newaxis,np.newaxis,:]
+    sinlat= np.sin(pilat)[np.newaxis,np.newaxis,:]
     R     = 1./(a0*coslat)
     f     = 2*Omega*sinlat
-    pp0  = (p0/pres[newaxis,:,newaxis])**kappa
-    dp    = gradient(pres)[newaxis,:,newaxis]
+    pp0  = (p0/pres[np.newaxis,:,np.newaxis])**kappa
+    dp    = np.gradient(pres)[np.newaxis,:,np.newaxis]
     #
     # absolute vorticity
     if do_ubar:
-        ubar = nanmean(u,axis=-1)
-        fhat = R*gradient(ubar*coslat,edge_order=2)[-1]/dphi
+        ubar = np.nanmean(u,axis=-1)
+        fhat = R*np.gradient(ubar*coslat,edge_order=2)[-1]/dphi
     else:
         fhat = 0.
     fhat = f - fhat # [1/s]
@@ -761,15 +751,15 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     u = GetAnomaly(u)
     v = GetAnomaly(v)
     if isinstance(wave,list):
-        upvp = sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
+        upvp = np.sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
     elif wave<0:
-        upvp = nanmean(u*v,axis=-1)
+        upvp = np.nanmean(u*v,axis=-1)
     else:
         upvp = GetWaves(u,v,wave=wave)
     #
     ## compute the horizontal component
     if do_ubar:
-        shear = gradient(ubar,edge_order=2)[1]/dp # [m/s.hPa]
+        shear = np.gradient(ubar,edge_order=2)[1]/dp # [m/s.hPa]
     else:
         shear = 0.
     ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
@@ -783,7 +773,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
         if isinstance(wave,list):
             w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
         elif wave<0:
-            w = nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
+            w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
         else:
             w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
         ep2_cart = ep2_cart - w # [m.hPa/s2]
@@ -795,12 +785,12 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
     #    where a*cosphi comes from using cartesian, and cosphi from the derivative
     # With some algebra, we get
     #  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
-    div1 = coslat*gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
+    div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
     # Now, we want acceleration, which is div(F)/a.cosphi [m/s2]
     div1 = R*div1 # [m/s2]
     #
     # Similarly, we want acceleration = 1/a.coshpi*a.cosphi*d/dp[ep2_cart] [m/s2]
-    div2 = gradient(ep2_cart,edge_order=2)[1]/dp # [m/s2]
+    div2 = np.gradient(ep2_cart,edge_order=2)[1]/dp # [m/s2]
     #
     # convert to m/s/day
     div1 = div1*86400
@@ -822,17 +812,16 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     OUTPUTS:
       integ- averaged data, length N
     """
-    from numpy import trapz,cos,prod,reshape,newaxis,pi,where
     #get data into the correct shape
     tmp = AxRoll(data,axis)
     shpe= tmp.shape
-    tmp = reshape(tmp,(shpe[0],prod(shpe[1:])))
+    tmp = np.reshape(tmp,(shpe[0],np.prod(shpe[1:])))
     #cosine weighting
-    J = where((lat>=lim)*(lat<=mx))[0]
-    coslat = cos(lat*pi/180.)**cosp
-    coswgt = trapz(coslat[J],lat[J])
-    tmp = trapz(tmp[J,:]*coslat[J][:,newaxis],lat[J],axis=0)/coswgt
-    integ = reshape(tmp,shpe[1:])
+    J = np.where((lat>=lim)*(lat<=mx))[0]
+    coslat = np.cos(np.deg2rad(lat))**cosp
+    coswgt = np.trapz(coslat[J],lat[J])
+    tmp = np.trapz(tmp[J,:]*coslat[J][:,np.newaxis],lat[J],axis=0)/coswgt
+    integ = np.reshape(tmp,shpe[1:])
     return integ
 
 ##############################################################################################
@@ -851,14 +840,28 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
         OUTPUTS:
             N2  - Brunt-Vaisala frequency, [1/s2], dim pres x lat
     '''
-    from numpy import newaxis,gradient
-    dp   = gradient(pres)[:,newaxis]*100.
-    dTdp = gradient(Tz,edge_order=2)[0]/dp
-    p = pres[:,newaxis]*100. # [Pa]
+    dp   = np.gradient(pres)[:,np.newaxis]*100.
+    dTdp = np.gradient(Tz,edge_order=2)[0]/dp
+    p = pres[:,np.newaxis]*100. # [Pa]
     N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
     return N2
 
 ##############################################################################################
+@jit
+def FlexiGradPhi(data,dphi):
+    if len(data.shape) == 3:
+        grad = np.gradient(data,edge_order=2)[2]
+    else:
+        grad = np.gradient(data,edge_order=2)[1]
+    return grad/dphi
+@jit
+def FlexiGradP(data,dp):
+    if len(data.shape) == 3:
+        grad = np.gradient(data,edge_order=2)[1]
+    else:
+        grad = np.gradient(data,edge_order=2)[0]
+    return grad/dp
+@jit(cache=True)
 def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, component='ABC'):
     '''Compute the meridional gradient of potential vorticity.
         Computed following Simpson et al JAS (2009) DOI 10.1175/2008JAS2758.1.
@@ -881,9 +884,8 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
     '''
     if not ('A' in component)+('B' in component)+('C' in component):
         raise ValueError('component has to contain A,B and/or C, but got '+component)
-    from numpy import pi,cos,sin,newaxis,gradient,deg2rad,zeros
     # some constants
-    Omega = 2*pi/(86400.) # [1/s]
+    Omega = 2*np.pi/(86400.) # [1/s]
     p0    = 1e5 #[Pa]
 
     ## make sure we have the dimesions as expected
@@ -891,55 +893,43 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
         raise ValueError('UZ AND TZ DO NOT HAVE THE SAME SHAPE')
     elif len(uz.shape) > 3:
         raise ValueError('TOO MANY DIMENSIONS IN UZ AND TZ')
-    def FlexiGradPhi(data,dphi):
-        if len(data.shape) == 3:
-            grad = gradient(data,edge_order=2)[2]
-        else:
-            grad = gradient(data,edge_order=2)[1]
-        return grad/dphi
-    def FlexiGradP(data,dp):
-        if len(data.shape) == 3:
-            grad = gradient(data,edge_order=2)[1]
-        else:
-            grad = gradient(data,edge_order=2)[0]
-        return grad/dp
 
     ## convert to Pa
     p = pres[:]*100
     if len(uz.shape) == 3:
-        dp = gradient(p)[newaxis,:,newaxis]
-        p  = p[newaxis,:,newaxis]
+        dp = np.gradient(p)[np.newaxis,:,np.newaxis]
+        p  = p[np.newaxis,:,np.newaxis]
     else:
-        dp = gradient(p)[:,newaxis]
-        p = p[:,newaxis]
+        dp = np.gradient(p)[:,np.newaxis]
+        p = p[:,np.newaxis]
     ## convert to radians
-    latpi = deg2rad(lat)
+    latpi = np.deg2rad(lat)
     if len(uz.shape) == 3:
-        dphi = gradient(latpi)[newaxis,newaxis,:]
-        latpi= latpi[newaxis,newaxis,:]
+        dphi = np.gradient(latpi)[np.newaxis,np.newaxis,:]
+        latpi= latpi[np.newaxis,np.newaxis,:]
     else:
-        dphi = gradient(latpi)[newaxis,:]
-        latpi = latpi[newaxis,:]
+        dphi = np.gradient(latpi)[np.newaxis,:]
+        latpi = latpi[np.newaxis,:]
 
     #
-    result = zeros(uz.shape)
+    result = np.zeros(uz.shape)
     ## first term A
     if 'A' in component:
-        A = 2*Omega*cos(latpi)
+        A = 2*Omega*np.cos(latpi)
         result += A
     
     #
     ## second term B
     if 'B' in component:
-        dudphi = FlexiGradPhi(uz*cos(latpi),dphi)
-        B = dudphi/cos(latpi)/a0
+        dudphi = FlexiGradPhi(uz*np.cos(latpi),dphi)
+        B = dudphi/np.cos(latpi)/a0
         B = FlexiGradPhi(B,dphi)
         result -= B
     
     #
     ## third term C
     if 'C' in component:
-        f = 2*Omega*sin(latpi)
+        f = 2*Omega*np.sin(latpi)
         
         dudp = FlexiGradP(uz,dp)
         
@@ -982,15 +972,14 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
         Outputs are:
             n2  - refractive index, dimension pres x lat [.]
     '''
-    from numpy import cos,sin,deg2rad
     # some constants
     Rd    = 287.04 # [J/kg.K = m2/s2.K]
     cp    = 1004 # [J/kg.K = m2/s2.K]
     a0    = 6.371e6 # [m]
-    Omega = 2*pi/(24*3600.) # [1/s]
+    Omega = 2*np.pi/(24*3600.) # [1/s]
     H     = 7.e3 # [m]
 
-    latpi = deg2rad(lat)
+    latpi = np.deg2rad(lat)
 
     #
     ## term D
@@ -999,12 +988,12 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 
     #
     ## term E
-    latpi = latpi[newaxis,:]
-    E = ( k/(a0*cos(latpi)) )**2
+    latpi = latpi[np.newaxis,:]
+    E = ( k/(a0*np.cos(latpi)) )**2
 
     #
     ## term F
-    f = 2*Omega*sin(latpi)
+    f = 2*Omega*np.sin(latpi)
     f2 = f*f
     if N2const is None:
         N2 = ComputeN2(pres,Tz,H,Rd,cp)
@@ -1033,7 +1022,6 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
 	OUTPUTS:
 		xym        - data in Fourier space
 	"""
-	from numpy import fft,squeeze,real,zeros,zeros_like,sum
 	initShape = x.shape
 	x = AxRoll(x,axis)
 	# compute anomalies
@@ -1044,25 +1032,27 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
             if do_anomaly:
                 y = GetAnomaly(y,0)
     # Fourier decompose
-	x = fft.fft(x,axis=0)
+	x = np.fft.fft(x,axis=0)
 	nmodes = x.shape[0]/2+1
-	if wave < 0:
-		if len(y) > 0:
-			xym = zeros((nmodes,)+x.shape[1:])
-		else:
-			xym = zeros((nmodes,)+initShape)
+	if wave < 0 and len(y) > 0:
+            if len(y) > 0:
+                xym = np.zeros((nmodes,)+x.shape[1:])
+            else:
+                xym = np.zeros((nmodes,)+initShape)
+        else:
+            xym = np.zeros(initShape[:-1])
 	if len(y) > 0:
-            y = fft.fft(y,axis=0)
+            y = np.fft.fft(y,axis=0)
             # Take out the waves
             nl  = x.shape[0]**2
-            xyf  = real(x*y.conj())/nl
+            xyf  = np.real(x*y.conj())/nl
             # due to symmetric spectrum, there's a factor of 2, but not for wave-0
-            mask = zeros_like(xyf)
+            mask = np.zeros_like(xyf)
             if wave < 0:
             	for m in range(xym.shape[0]):
             		mask[m,:] = 1
             		mask[-m,:]= 1
-            		xym[m,:] = sum(xyf*mask,axis=0)
+            		xym[m,:] = np.sum(xyf*mask,axis=0)
             		mask[:] = 0
             	xym = AxRoll(xym,axis,'i')
             else:
@@ -1070,20 +1060,20 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
             	if wave >= 0:
                 	xym = xym + xyf[-wave,:]
 	else:
-            mask = zeros_like(x)
+            mask = np.zeros_like(x)
             if wave >= 0:
                 mask[wave,:] = 1
                 mask[-wave,:]= 1 # symmetric spectrum for real signals
-                xym = real(fft.ifft(x*mask,axis=0))
+                xym = np.real(np.fft.ifft(x*mask,axis=0))
                 xym = AxRoll(xym,axis,'i')
             else:
                 for m in range(xym.shape[0]):
                     mask[m,:] = 1
                     mask[-m,:]= 1 # symmetric spectrum for real signals
-                    fourTmp = real(fft.ifft(x*mask,axis=0))
+                    fourTmp = np.real(np.fft.ifft(x*mask,axis=0))
                     xym[m,:] = AxRoll(fourTmp,axis,'i')
                     mask[:] = 0
-	return squeeze(xym)
+	return np.squeeze(xym)
 
 ##helper functions
 def GetAnomaly(x,axis=-1):
@@ -1094,40 +1084,38 @@ def GetAnomaly(x,axis=-1):
       axis - axis along dimension for anomalies
     OUTPUTS:
       x    - anomalous array
-    """
-    from numpy import newaxis
-    #bring axis to the front
+    """    #bring axis to the front
     xt= AxRoll(x,axis)
     #compute anomalies
-    xt = xt - xt.mean(axis=0)[newaxis,:]
+    xt = xt - xt.mean(axis=0)[np.newaxis,:]
     #bring axis back to where it was
     x = AxRoll(xt,axis,'i')
     return x
 
 
 #######################################################
-def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
+def Meters2Coord(data,coord,mode='m2lat',axis=-1):
     """Convert value (probably vector component) of one unit
         into another one.
 
         INPUTS:
         data  - data to convert
-        mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
         coord - values of latitude [degrees] or pressure [hPa]
+        mode  - 'm2lat', 'm2lon', 'm2hPa', and all inverses
         axis  - axis of data which needs modification
         OUTPUTS:
         out   - converted from data
         """
-    from numpy import cos,pi
     # constants
     a0    = 6.371e6
     ps    = 1e3
     H     = 7e3
     # geometric quantitites
-    rad2deg = 180/pi
-    coslat  = cos(lat/rad2deg)
-    cosm1   = 1/coslat
-    gemfac  = rad2deg/a0
+    if 'lat' in mod:
+       rad2deg = 180/np.pi
+       coslat  = np.cos(coord/rad2deg)
+       cosm1   = 1/coslat
+       gemfac  = rad2deg/a0
     #
     if mode is 'm2lat':
         out = data*gemfac
@@ -1135,7 +1123,7 @@ def Meters2Coord(data,mode='m2lat',coord=[],axis=-1):
         out = data/gemfac
     elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
         tmp = AxRoll(data,axis)
-        out = zeros_like(tmp)
+        out = np.zeros_like(tmp)
     else:
         raise ValueError("mode not recognized")
     if mode is 'm2lon':
@@ -1180,7 +1168,6 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
         dT      - dictionary with options ['S'] and ['N'] if hemi='both'
         			otherwise array of length len(time)
     """
-    import numpy as np
 
     numTimeSteps = tempIn.shape[0]
     # get important meridional grid points
