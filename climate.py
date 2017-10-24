@@ -1111,13 +1111,13 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
     ps    = 1e3
     H     = 7e3
     # geometric quantitites
-    if 'lat' in mod:
+    if 'lat' in mode or 'lon' in mode:
        rad2deg = 180/np.pi
        coslat  = np.cos(coord/rad2deg)
        cosm1   = 1/coslat
        gemfac  = rad2deg/a0
     #
-    ndims = len(shape(data))
+    ndims = len(np.shape(data))
     if mode is 'm2lat':
         out = data*gemfac
     elif mode is 'lat2m':
@@ -1125,6 +1125,8 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
     elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
         if ndims > 1:
             tmp = AxRoll(data,axis)
+	else:
+	    tmp = data
         out = np.zeros_like(tmp)
     else:
         raise ValueError("mode not recognized")
@@ -1141,7 +1143,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
             for l in range(out.shape[0]):
                 out[l,:] = tmp[l,:]*coslat
         else:
-            out = out*coslat
+            out = tmp*coslat
         out = out/gemfac
     elif mode is 'm2hPa':
         if ndims > 1:
