@@ -483,15 +483,17 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
     return v_bar,t_bar
 
 ##############################################################################################
-def eof(X,n=1):
+def eof(X,n=1,detrend='constant'):
     """Principal Component Analysis / Empirical Orthogonal Functions / SVD
 
         Uses Singular Value Decomposition to find the dominant modes of variability.
         The field X can be reconstructed with Y = dot(EOF,PC) + X.mean(axis=time)
 
         INPUTS:
-            X -- Field, shape (time x space).
-            n -- Number of modes to extract
+            X       -- Field, shape (time x space).
+            n       -- Number of modes to extract
+            detrend -- detrend with global mean ('constant')
+                          or linear trend ('linear')
         OUTPUTS:
             EOF - Spatial modes of variability
             PC  - Temporal evolution of EOFs
@@ -509,7 +511,7 @@ def eof(X,n=1):
     #    X = X.T
     #    shpe = np.shape(X)
     # take out the time mean
-    X = sg.detrend(X.T)
+    X = sg.detrend(X.T,type=detrend)
     # perform SVD - v is actually V.H in X = U*S*V.H
     u,s,v = np.linalg.svd(X, full_matrices=False)
     # now, u contains the spatial, and v the temporal structures
@@ -531,7 +533,7 @@ def eof(X,n=1):
 
 
 ##############################################################################################
-def ComputeAnnularMode(lat, pres, time, data, choice='z'):
+def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='constant'):
     """Compute annular mode as in Geber et al, GRL 2008.
         This is basically the first PC, but normalized to unit variance and zero mean.
 
@@ -543,16 +545,32 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
                         geopotential or zonal wind.
                         Size time x pres x lat (ie zonal mean)
             choice - not essential, but used for sign convention.
-                        If 'z', the sign is determined based on 70-80N.
-                        Otherwise, 50-60N is used.
+                        If 'z', the sign is determined based on 70-80N/S.
+                        Otherwise, 50-60N/S is used.
+            hemi   - hemisphere to consider
+                        'infer' - if mean(lat)>=0 -> NH, else SH
+                        'SH' or 'NH'
+            detrend- detrend method for computing EOFs:
+                        'linear' -> remove linear trend
+                        'constant' -> remove total time mean
         OUTPUT:
             AM     - The annular mode, size time x pres
     """
     #
     AM = np.empty((len(time),len(pres)))
     AM[:] = np.nan
-    j_tmp = np.where(lat > 20)[0]
-    coslat = np.cos(lat*np.pi/180.)
+    # guess the hemisphere
+    if hemi == 'infer':
+        if np.mean(lat) >= 0:
+            sgn = 1.
+        else:
+            sgn = -1.
+    elif hemi == 'SH':
+        sgn = -1.
+    elif hemi == 'NH':
+        sgn = 1.
+    j_tmp = np.where(sgn*lat > 20)[0]
+    coslat = np.cos(np.deg2rad(lat))
     negCos = (coslat < 0.)
     coslat[negCos] = 0.
     # weighting as in Gerber et al GRL 2008
@@ -567,7 +585,7 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
         minj = 50
         maxj = 60
         sig = 1
-    jj = (lat[j_tmp] > minj)*(lat[j_tmp] < maxj)
+    jj = (sgn*lat[j_tmp] > minj)*(sgn*lat[j_tmp] < maxj)
     # second possibility
     #jj = abs(lat[j_tmp]-80).argmin()
     #sig = -1
@@ -579,7 +597,7 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z'):
         var = var[:,j_tmp]*sqrtcoslat[np.newaxis,:]
         varNan = np.isnan(var)
         if np.sum(np.reshape(varNan,(np.size(varNan),)))==0:
-            eof1,pc1,E,u,s,v = eof(var)
+            eof1,pc1,E,u,s,v = eof(var,detrend=detrend)
             # force the sign of PC
             pc1  = pc1*sig*np.sign(eof1[jj].mean())
             # force unit variance and zero mean
