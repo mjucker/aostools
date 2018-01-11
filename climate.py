@@ -1034,7 +1034,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
     # Fourier decompose
 	x = np.fft.fft(x,axis=0)
 	nmodes = x.shape[0]/2+1
-	if wave < 0 and len(y) > 0:
+	if wave < 0:
             if len(y) > 0:
                 xym = np.zeros((nmodes,)+x.shape[1:])
             else:
