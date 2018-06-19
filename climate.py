@@ -582,16 +582,16 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='c
         maxj = 80
         sig = -1
     else:
-        minj = 50
-        maxj = 60
+        minj = min(sgn*50,sgn*60)
+        maxj = max(sgn*60,sgn*50)
         sig = 1
-    jj = (sgn*lat[j_tmp] > minj)*(sgn*lat[j_tmp] < maxj)
+    jj = (lat[j_tmp] > minj)*(lat[j_tmp] < maxj)
     # second possibility
     #jj = abs(lat[j_tmp]-80).argmin()
     #sig = -1
     for k in range(len(pres)):
         # remove global mean
-        globZ = GlobalAvg(lat,data[:,k,:],axis=-1)
+        globZ = GlobalAvg(lat,data[:,k,:],axis=-1,lim=lat[j_tmp[0]],mx=lat[j_tmp[-1]])
         var = data[:,k,:] - globZ[:,np.newaxis]
         # area weighting: EOFs are ~variance, thus take sqrt(cos)
         var = var[:,j_tmp]*sqrtcoslat[np.newaxis,:]
@@ -935,7 +935,7 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
     if 'A' in component:
         A = 2*Omega*np.cos(latpi)
         result += A
-    
+
     #
     ## second term B
     if 'B' in component:
@@ -943,19 +943,19 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
         B = dudphi/np.cos(latpi)/a0
         B = FlexiGradPhi(B,dphi)
         result -= B
-    
+
     #
     ## third term C
     if 'C' in component:
         f = 2*Omega*np.sin(latpi)
-        
+
         dudp = FlexiGradP(uz,dp)
-        
+
         kappa = Rd/cp
         pp0   = (p0/p)**kappa
         theta = Tz*pp0
         theta_p = FlexiGradP(theta,dp)
-        
+
         C = p*theta*dudp/(Tz*theta_p)
         C = FlexiGradP(C,dp)
         C = a0*f*f*C/Rd
