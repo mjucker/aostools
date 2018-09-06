@@ -362,7 +362,8 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
         l = data[lat]
         p = data[pfull]
         data = []
-    p = p*100 # [Pa]
+    p  = p *100 # [Pa]
+    p0 = p0*100 # [Pa]
     #
     ## compute psi
 
