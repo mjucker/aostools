@@ -267,7 +267,7 @@ def ComputeSaturationMixingRatio(T, p, pDim):
 
 
 ##############################################################################################
-def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', pfull='pfull'):
+def ComputeRelativeHumidity(inFile, pDim, outFile='none', temp='temp', sphum='sphum', pfull='pfull'):
     """Computes relative humidity from temperature and specific humidity.
 
         File inFile is assumed to contain both temperature and specific humidity.
@@ -276,6 +276,7 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
         Inputs:
             inFile    Name of the file (full path)
                         containing temperature and moisture
+            pDim      Index of pressure dimension within temperature array
             outFile   Name of the output file containing specific humidity.
                         No output file is created if outFile='none'
             temp      Name of the temperature variable inside inFile
@@ -293,7 +294,7 @@ def ComputeRelativeHumidity(inFile, outFile='none', temp='temp', sphum='sphum', 
     p = inFile.variables[pfull][:]
 
     # compute saturation mixing ratio
-    qsat = ComputeSaturationMixingRatio(t, p)
+    qsat = ComputeSaturationMixingRatio(t, p, pDim)
 
     #write output file
     if outFile is not 'none':
@@ -831,6 +832,9 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
     OUTPUTS:
       integ- averaged data, length N
     """
+    #make sure there are more than one grid points
+    if len(lat) < 2:
+        return np.mean(data,axis=axis)
     #get data into the correct shape
     tmp = AxRoll(data,axis)
     shpe= tmp.shape
