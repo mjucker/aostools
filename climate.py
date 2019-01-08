@@ -430,7 +430,10 @@ def update_progress(progress,barLength=10,info=None):
     else:
         text = '\r'
     if progress == 1:
-        text = "\r{0}   {1}     {2}".format(" "*len(info)," "*barLength,status)
+        if info is not None:
+            text = "\r{0}   {1}     {2}".format(" "*(len(info)+1)," "*barLength,status)
+        else:
+            text = "\r   {0}     {1}".format(" "*barLength,status)
     else:
         text += "[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
     sys.stdout.write(text)
