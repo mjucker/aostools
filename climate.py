@@ -508,13 +508,10 @@ def eof(X,n=1,detrend='constant'):
             v   - temporal modes
     """
     import scipy.signal as sg
-
-    # find out which dimension is time
-    #  assume that time is longer dimension
-    #shpe = np.shape(X)
-    #if shpe[0] > shpe[1]:
-    #    X = X.T
-    #    shpe = np.shape(X)
+    # make sure we have a matrix time x space
+    shpe = X.shape
+    if len(shpe) > 2:
+        X = X.reshape([shpe[0],np.prod(shpe[1:])])
     # take out the time mean
     X = sg.detrend(X.T,type=detrend)
     # perform SVD - v is actually V.H in X = U*S*V.H
@@ -533,8 +530,16 @@ def eof(X,n=1,detrend='constant'):
     #  but SVD yields \gamma = \sqrt{\lambda}
     s = s*s
     E   = s[:n]/sum(s)
-
-    return EOF,PC,E,u[:,:n],np.sqrt(s[:n]),v.T[:,:n]
+    # now we need to make sure we get everything into the correct shape again
+    u = u[:,:n]
+    s = np.sqrt(s[:n])
+    v = v.T[:,:n]
+    if len(shpe) > 2:
+        # replace time dimension with modes at the end of the array
+        newshape = list(shpe[1:])+[n]
+        EOF = EOF.reshape(newshape)
+        u   = u  .reshape(newshape)
+    return EOF,PC,E,u,s,v
 
 
 ##############################################################################################
