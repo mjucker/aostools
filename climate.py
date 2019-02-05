@@ -212,26 +212,19 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 # get the saturation mixing ration according to Clausius-Clapeyron
 
 # helper function: re-arrange array dimensions
-def AxRoll(x,ax,start_mode=0):
+def AxRoll(x,ax,invert=False):
     """Re-arrange array x so that axis 'ax' is first dimension.
-        Undo this if start_mode=='i'
+        Undo this if invert=True
     """
-    if isinstance(start_mode, basestring):
-        mode = start_mode
-    else:
-        mode = 'f'
-    #
     if ax < 0:
         n = len(x.shape) + ax
     else:
         n = ax
     #
-    if mode is 'f':
-        y = np.rollaxis(x,n,start_mode)
-    elif mode is 'i':
-        y = np.rollaxis(x,0,n+1)
+    if invert is False:
+        y = np.rollaxis(x,n,0)
     else:
-        raise Exception("mode must be 'f' for forward or 'i' for inverse")
+        y = np.rollaxis(x,0,n+1)
     return y
 
 
@@ -263,7 +256,7 @@ def ComputeSaturationMixingRatio(T, p, pDim):
     # finally, compute saturation mixing ratio from pressure
     for k in range(len(p)):
         qsat[k,:] = Rd/Rv*esat[k,:]/(p[k]-esat[k,:])
-    return AxRoll(qsat,pDim,'i')
+    return AxRoll(qsat,pDim,invert=True)
 
 
 ##############################################################################################
@@ -1085,7 +1078,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
             		mask[-m,:]= 1
             		xym[m,:] = np.sum(xyf*mask,axis=0)
             		mask[:] = 0
-            	xym = AxRoll(xym,axis,'i')
+            	xym = AxRoll(xym,axis,invert=True)
             else:
             	xym = xyf[wave,:]
             	if wave >= 0:
@@ -1096,13 +1089,13 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
                 mask[wave,:] = 1
                 mask[-wave,:]= 1 # symmetric spectrum for real signals
                 xym = np.real(np.fft.ifft(x*mask,axis=0))
-                xym = AxRoll(xym,axis,'i')
+                xym = AxRoll(xym,axis,invert=True)
             else:
                 for m in range(xym.shape[0]):
                     mask[m,:] = 1
                     mask[-m,:]= 1 # symmetric spectrum for real signals
                     fourTmp = np.real(np.fft.ifft(x*mask,axis=0))
-                    xym[m,:] = AxRoll(fourTmp,axis,'i')
+                    xym[m,:] = AxRoll(fourTmp,axis,invert=True)
                     mask[:] = 0
 	return np.squeeze(xym)
 
@@ -1120,7 +1113,7 @@ def GetAnomaly(x,axis=-1):
     #compute anomalies
     xt = xt - xt.mean(axis=0)[np.newaxis,:]
     #bring axis back to where it was
-    x = AxRoll(xt,axis,'i')
+    x = AxRoll(xt,axis,invert=True)
     return x
 
 
@@ -1168,7 +1161,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
         else:
             out = tmp*cosm1
         out = out*gemfac
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     elif mode is 'lon2m':
         if ndims > 1:
             for l in range(out.shape[0]):
@@ -1183,7 +1176,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
         else:
             out = -coord*tmp
         out = out/H
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     elif mode is 'hPa2m':
         if ndims > 1:
             for p in range(out.shape[0]):
@@ -1192,7 +1185,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
             out = -coord/tmp
         out[tmp==0] = NaN
         out = out*H
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     #
     return out
 
