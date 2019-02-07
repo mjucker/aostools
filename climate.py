@@ -1029,43 +1029,43 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
     return a0*a0*(D-E-F)
 
 ##############################################################################################
-def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
-	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
+def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
+    """Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
 
         If y!=[], returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Shape is same as input, except axis which is len(axis)/2+1 due to Fourier symmetry for real signals.
 
         If y=[] and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
         If y=[] and wave=-1, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
 
-	INPUTS:
-		x          - the array to decompose
-		y          - second array if wanted
-		wave       - which mode to extract. all if <0
-		axis       - along which axis of x (and y) to decompose
-		do_anomaly - decompose from anomalies or full data
-	OUTPUTS:
-		xym        - data in Fourier space
-	"""
-	initShape = x.shape
-	x = AxRoll(x,axis)
-	# compute anomalies
-	if do_anomaly:
-            x = GetAnomaly(x,0)
-        if len(y) > 0:
-            y = AxRoll(y,axis)
-            if do_anomaly:
-                y = GetAnomaly(y,0)
+    INPUTS:
+        x          - the array to decompose
+        y          - second array if wanted
+        wave       - which mode to extract. all if <0
+        axis       - along which axis of x (and y) to decompose
+        do_anomaly - decompose from anomalies or full data
+    OUTPUTS:
+        xym        - data in Fourier space
+    """
+    initShape = x.shape
+    x = AxRoll(x,axis)
+    if y is not None:
+        y = AxRoll(y,axis)
+    # compute anomalies
+    if do_anomaly:
+        x = GetAnomaly(x,0)
+        if y is not None:
+            y = GetAnomaly(y,0)
     # Fourier decompose
-	x = np.fft.fft(x,axis=0)
-	nmodes = x.shape[0]/2+1
-	if wave < 0:
-            if len(y) > 0:
+    x = np.fft.fft(x,axis=0)
+    nmodes = x.shape[0]/2+1
+    if wave < 0:
+            if y is not None:
                 xym = np.zeros((nmodes,)+x.shape[1:])
             else:
                 xym = np.zeros((nmodes,)+initShape)
-        else:
-            xym = np.zeros(initShape[:-1])
-	if len(y) > 0:
+    else:
+        xym = np.zeros(initShape[:-1])
+    if y is not None:
             y = np.fft.fft(y,axis=0)
             # Take out the waves
             nl  = x.shape[0]**2
@@ -1083,7 +1083,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
             	xym = xyf[wave,:]
             	if wave >= 0:
                 	xym = xym + xyf[-wave,:]
-	else:
+    else:
             mask = np.zeros_like(x)
             if wave >= 0:
                 mask[wave,:] = 1
@@ -1097,7 +1097,7 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
                     fourTmp = np.real(np.fft.ifft(x*mask,axis=0))
                     xym[m,:] = AxRoll(fourTmp,axis,invert=True)
                     mask[:] = 0
-	return np.squeeze(xym)
+    return np.squeeze(xym)
 
 ##helper functions
 def GetAnomaly(x,axis=-1):
