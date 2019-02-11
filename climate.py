@@ -1281,6 +1281,8 @@ def SymmetricColorbar(fig, obj, zero=0):
 #######################################################
 def Convert2Days(time,units,calendar):
     """
+        Convert an array of times with given units and calendar
+         into the same times but in units of days.
     """
     import netCDF4 as nc
     import netcdftime as nct
@@ -1289,3 +1291,54 @@ def Convert2Days(time,units,calendar):
     dayUnits = units.replace(unitArray[0],'days')
     t = nct.utime(dayUnits,calendar=calendar)
     return t.date2num(date)
+
+#######################################################
+def RegridLongitude(data,lon_ax=-1,is_dim=False):
+    """
+        Convert grid back and forth from -180 to 180 into 0 to 360
+         in longitude.
+
+        INPUTS:
+            data:    array to regrid
+            lon_ax:  axis of longitude dimension
+            is_dim:  data is the 1D dimension of longitude.
+                        In that case, the values have to be changed.
+        OUTPUTS:
+            output: new array on newly arranged longitude grid
+    """
+    lon_len = data.shape[lon_ax]
+    if len(data.shape) > 1:
+        data_roll = AxRoll(data,lon_ax)
+    new_lons = np.concatenate([np.arange(lon_len//2)+lon_len//2,np.arange(lon_len//2)])
+    if is_dim:
+        new_data = data[new_lons]
+        if np.max(data) > 180:
+            # we need to convert 0,360 to -180,180
+            new_data = np.where(new_data > 180,new_data-360,new_data)
+        else:
+            # we need to convert -180,180 to 0,360
+            new_data = np.where(new_data < 0,new_data+360,new_data)
+        return new_data
+    else:
+        if len(data.shape) > 1:
+            new_data = data_roll[new_lons,:]
+            return AxRoll(new_data,lon_ax,invert=True)
+        else:
+            return data[new_lons]
+
+#######################################################
+def InvertCoordinate(data,axis=-1):
+    """
+        Invert the direction of a coordinate.
+
+        INPUTS:
+            data:  array to regrid
+            axis:  axis of coordinate to be inverted
+        OUTPUTS:
+            output: new array on newly arranged coordinate
+    """
+    if len(data.shape) > 1:
+        data_roll = AxRoll(data,axis)
+        return AxRoll(data_roll[-1::-1,:],axis,invert=True)
+    else:
+        return data[-1::-1]
