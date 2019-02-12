@@ -505,7 +505,7 @@ def eof(X,n=1,detrend='constant'):
     shpe = X.shape
     if len(shpe) > 2:
         X = X.reshape([shpe[0],np.prod(shpe[1:])])
-    # take out the time mean
+    # take out the time mean or trend
     X = sg.detrend(X.T,type=detrend)
     # perform SVD - v is actually V.H in X = U*S*V.H
     u,s,v = np.linalg.svd(X, full_matrices=False)
@@ -514,7 +514,7 @@ def eof(X,n=1,detrend='constant'):
     # u.shape = (space, modes(space)), v.shape = (modes(space), time)
 
     # get the first n modes, in physical units
-    #  we can either project the data onto the principal component, F*V
+    #  we can either project the data onto the principal component, X*V
     #  or multiply u*s. This is the same, as U*S*V.H*V = U*S
     EOF = np.dot(u[:,:n],np.diag(s)[:n,:n])
     # time evolution is in v
