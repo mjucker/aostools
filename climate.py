@@ -1293,38 +1293,40 @@ def Convert2Days(time,units,calendar):
     return t.date2num(date)
 
 #######################################################
-def RegridLongitude(data,lon_ax=-1,is_dim=False):
+def SwapDomain(data,swap_ax=-1,is_dim=False,lower_bound=None):
     """
-        Convert grid back and forth from -180 to 180 into 0 to 360
-         in longitude.
+        Swap first and second halves of a domain along a given axis.
+        Typically, this is uesed to convert a grid back and forth
+        from -180 to 180 into 0 to 360 in longitude.
 
         INPUTS:
-            data:    array to regrid
-            lon_ax:  axis of longitude dimension
-            is_dim:  data is the 1D dimension of longitude.
-                        In that case, the values have to be changed.
+            data:        array to regrid
+            swap_ax:     axis of along which to swap
+            is_dim:      data is the coordinate along which to swap.
+                          In that case, the values have to be changed.
+            lower_bound: if is_dim=True, where should the dimension start?
+                          if None (default), will start from midpoint
         OUTPUTS:
-            output: new array on newly arranged longitude grid
+            new_data: new array on newly arranged grid
     """
-    lon_len = data.shape[lon_ax]
+    if is_dim and len(data.shape) > 1:
+        raise ValueError('INPUT DATA CANNOT BE DIMENSION (NUM(DIMS)!=1)')
+    swap_len = data.shape[swap_ax]
+    new_lons = np.concatenate([np.arange(swap_len//2)+swap_len//2,np.arange(swap_len//2)])
     if len(data.shape) > 1:
-        data_roll = AxRoll(data,lon_ax)
-    new_lons = np.concatenate([np.arange(lon_len//2)+lon_len//2,np.arange(lon_len//2)])
-    if is_dim:
-        new_data = data[new_lons]
-        if np.max(data) > 180:
-            # we need to convert 0,360 to -180,180
-            new_data = np.where(new_data > 180,new_data-360,new_data)
-        else:
-            # we need to convert -180,180 to 0,360
-            new_data = np.where(new_data < 0,new_data+360,new_data)
-        return new_data
+        data_roll = AxRoll(data,swap_ax)
+        new_data  = data_roll[new_lons,:]
+        return AxRoll(new_data,swap_ax,invert=True)
     else:
-        if len(data.shape) > 1:
-            new_data = data_roll[new_lons,:]
-            return AxRoll(new_data,lon_ax,invert=True)
+        new_data = data[new_lons]
+        if is_dim:
+            if lower_bound is None:
+                lower_bound = new_data[0]
+            dl = np.diff(data)
+            return np.concatenate([[lower_bound],lower_bound+np.cumsum(dl)])
         else:
-            return data[new_lons]
+            return new_data
+        return new_data
 
 #######################################################
 def InvertCoordinate(data,axis=-1):
