@@ -580,8 +580,8 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='c
     # try to get the sign right
     # first possibility
     if choice == 'z':
-        minj = 70
-        maxj = 80
+        minj = min(sgn*70,sgn*80)
+        maxj = max(sgn*80,sgn*70)
         sig = -1
     else:
         minj = min(sgn*50,sgn*60)
