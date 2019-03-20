@@ -212,26 +212,19 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 # get the saturation mixing ration according to Clausius-Clapeyron
 
 # helper function: re-arrange array dimensions
-def AxRoll(x,ax,start_mode=0):
+def AxRoll(x,ax,invert=False):
     """Re-arrange array x so that axis 'ax' is first dimension.
-        Undo this if start_mode=='i'
+        Undo this if invert=True
     """
-    if isinstance(start_mode, basestring):
-        mode = start_mode
-    else:
-        mode = 'f'
-    #
     if ax < 0:
         n = len(x.shape) + ax
     else:
         n = ax
     #
-    if mode is 'f':
-        y = np.rollaxis(x,n,start_mode)
-    elif mode is 'i':
-        y = np.rollaxis(x,0,n+1)
+    if invert is False:
+        y = np.rollaxis(x,n,0)
     else:
-        raise Exception("mode must be 'f' for forward or 'i' for inverse")
+        y = np.rollaxis(x,0,n+1)
     return y
 
 
@@ -263,7 +256,7 @@ def ComputeSaturationMixingRatio(T, p, pDim):
     # finally, compute saturation mixing ratio from pressure
     for k in range(len(p)):
         qsat[k,:] = Rd/Rv*esat[k,:]/(p[k]-esat[k,:])
-    return AxRoll(qsat,pDim,'i')
+    return AxRoll(qsat,pDim,invert=True)
 
 
 ##############################################################################################
@@ -431,7 +424,10 @@ def update_progress(progress,barLength=10,info=None):
     else:
         text = '\r'
     if progress == 1:
-        text = "\r{0}   {1}     {2}".format(" "*len(info)," "*barLength,status)
+        if info is not None:
+            text = "\r{0}   {1}     {2}".format(" "*(len(info)+1)," "*barLength,status)
+        else:
+            text = "\r   {0}     {1}".format(" "*barLength,status)
     else:
         text += "[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
     sys.stdout.write(text)
@@ -505,14 +501,11 @@ def eof(X,n=1,detrend='constant'):
             v   - temporal modes
     """
     import scipy.signal as sg
-
-    # find out which dimension is time
-    #  assume that time is longer dimension
-    #shpe = np.shape(X)
-    #if shpe[0] > shpe[1]:
-    #    X = X.T
-    #    shpe = np.shape(X)
-    # take out the time mean
+    # make sure we have a matrix time x space
+    shpe = X.shape
+    if len(shpe) > 2:
+        X = X.reshape([shpe[0],np.prod(shpe[1:])])
+    # take out the time mean or trend
     X = sg.detrend(X.T,type=detrend)
     # perform SVD - v is actually V.H in X = U*S*V.H
     u,s,v = np.linalg.svd(X, full_matrices=False)
@@ -521,7 +514,7 @@ def eof(X,n=1,detrend='constant'):
     # u.shape = (space, modes(space)), v.shape = (modes(space), time)
 
     # get the first n modes, in physical units
-    #  we can either project the data onto the principal component, F*V
+    #  we can either project the data onto the principal component, X*V
     #  or multiply u*s. This is the same, as U*S*V.H*V = U*S
     EOF = np.dot(u[:,:n],np.diag(s)[:n,:n])
     # time evolution is in v
@@ -530,8 +523,16 @@ def eof(X,n=1,detrend='constant'):
     #  but SVD yields \gamma = \sqrt{\lambda}
     s = s*s
     E   = s[:n]/sum(s)
-
-    return EOF,PC,E,u[:,:n],np.sqrt(s[:n]),v.T[:,:n]
+    # now we need to make sure we get everything into the correct shape again
+    u = u[:,:n]
+    s = np.sqrt(s[:n])
+    v = v.T[:,:n]
+    if len(shpe) > 2:
+        # replace time dimension with modes at the end of the array
+        newshape = list(shpe[1:])+[n]
+        EOF = EOF.reshape(newshape)
+        u   = u  .reshape(newshape)
+    return EOF,PC,E,u,s,v
 
 
 ##############################################################################################
@@ -1028,43 +1029,43 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
     return a0*a0*(D-E-F)
 
 ##############################################################################################
-def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
-	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
+def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
+    """Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
 
         If y!=[], returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Shape is same as input, except axis which is len(axis)/2+1 due to Fourier symmetry for real signals.
 
         If y=[] and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
         If y=[] and wave=-1, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
 
-	INPUTS:
-		x          - the array to decompose
-		y          - second array if wanted
-		wave       - which mode to extract. all if <0
-		axis       - along which axis of x (and y) to decompose
-		do_anomaly - decompose from anomalies or full data
-	OUTPUTS:
-		xym        - data in Fourier space
-	"""
-	initShape = x.shape
-	x = AxRoll(x,axis)
-	# compute anomalies
-	if do_anomaly:
-            x = GetAnomaly(x,0)
-        if len(y) > 0:
-            y = AxRoll(y,axis)
-            if do_anomaly:
-                y = GetAnomaly(y,0)
+    INPUTS:
+        x          - the array to decompose
+        y          - second array if wanted
+        wave       - which mode to extract. all if <0
+        axis       - along which axis of x (and y) to decompose
+        do_anomaly - decompose from anomalies or full data
+    OUTPUTS:
+        xym        - data in Fourier space
+    """
+    initShape = x.shape
+    x = AxRoll(x,axis)
+    if y is not None:
+        y = AxRoll(y,axis)
+    # compute anomalies
+    if do_anomaly:
+        x = GetAnomaly(x,0)
+        if y is not None:
+            y = GetAnomaly(y,0)
     # Fourier decompose
-	x = np.fft.fft(x,axis=0)
-	nmodes = x.shape[0]/2+1
-	if wave < 0:
-            if len(y) > 0:
+    x = np.fft.fft(x,axis=0)
+    nmodes = x.shape[0]/2+1
+    if wave < 0:
+            if y is not None:
                 xym = np.zeros((nmodes,)+x.shape[1:])
             else:
                 xym = np.zeros((nmodes,)+initShape)
-        else:
-            xym = np.zeros(initShape[:-1])
-	if len(y) > 0:
+    else:
+        xym = np.zeros(initShape[:-1])
+    if y is not None:
             y = np.fft.fft(y,axis=0)
             # Take out the waves
             nl  = x.shape[0]**2
@@ -1077,26 +1078,26 @@ def GetWaves(x,y=[],wave=-1,axis=-1,do_anomaly=False):
             		mask[-m,:]= 1
             		xym[m,:] = np.sum(xyf*mask,axis=0)
             		mask[:] = 0
-            	xym = AxRoll(xym,axis,'i')
+            	xym = AxRoll(xym,axis,invert=True)
             else:
             	xym = xyf[wave,:]
             	if wave >= 0:
                 	xym = xym + xyf[-wave,:]
-	else:
+    else:
             mask = np.zeros_like(x)
             if wave >= 0:
                 mask[wave,:] = 1
                 mask[-wave,:]= 1 # symmetric spectrum for real signals
                 xym = np.real(np.fft.ifft(x*mask,axis=0))
-                xym = AxRoll(xym,axis,'i')
+                xym = AxRoll(xym,axis,invert=True)
             else:
                 for m in range(xym.shape[0]):
                     mask[m,:] = 1
                     mask[-m,:]= 1 # symmetric spectrum for real signals
                     fourTmp = np.real(np.fft.ifft(x*mask,axis=0))
-                    xym[m,:] = AxRoll(fourTmp,axis,'i')
+                    xym[m,:] = AxRoll(fourTmp,axis,invert=True)
                     mask[:] = 0
-	return np.squeeze(xym)
+    return np.squeeze(xym)
 
 ##helper functions
 def GetAnomaly(x,axis=-1):
@@ -1112,7 +1113,7 @@ def GetAnomaly(x,axis=-1):
     #compute anomalies
     xt = xt - xt.mean(axis=0)[np.newaxis,:]
     #bring axis back to where it was
-    x = AxRoll(xt,axis,'i')
+    x = AxRoll(xt,axis,invert=True)
     return x
 
 
@@ -1160,7 +1161,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
         else:
             out = tmp*cosm1
         out = out*gemfac
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     elif mode is 'lon2m':
         if ndims > 1:
             for l in range(out.shape[0]):
@@ -1175,7 +1176,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
         else:
             out = -coord*tmp
         out = out/H
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     elif mode is 'hPa2m':
         if ndims > 1:
             for p in range(out.shape[0]):
@@ -1184,7 +1185,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
             out = -coord/tmp
         out[tmp==0] = NaN
         out = out*H
-        out = AxRoll(out,axis,'i')
+        out = AxRoll(out,axis,invert=True)
     #
     return out
 
@@ -1280,6 +1281,8 @@ def SymmetricColorbar(fig, obj, zero=0):
 #######################################################
 def Convert2Days(time,units,calendar):
     """
+        Convert an array of times with given units and calendar
+         into the same times but in units of days.
     """
     import netCDF4 as nc
     import netcdftime as nct
@@ -1288,3 +1291,56 @@ def Convert2Days(time,units,calendar):
     dayUnits = units.replace(unitArray[0],'days')
     t = nct.utime(dayUnits,calendar=calendar)
     return t.date2num(date)
+
+#######################################################
+def SwapDomain(data,swap_ax=-1,is_dim=False,lower_bound=None):
+    """
+        Swap first and second halves of a domain along a given axis.
+        Typically, this is uesed to convert a grid back and forth
+        from -180 to 180 into 0 to 360 in longitude.
+
+        INPUTS:
+            data:        array to regrid
+            swap_ax:     axis of along which to swap
+            is_dim:      data is the coordinate along which to swap.
+                          In that case, the values have to be changed.
+            lower_bound: if is_dim=True, where should the dimension start?
+                          if None (default), will start from midpoint
+        OUTPUTS:
+            new_data: new array on newly arranged grid
+    """
+    if is_dim and len(data.shape) > 1:
+        raise ValueError('INPUT DATA CANNOT BE DIMENSION (NUM(DIMS)!=1)')
+    swap_len = data.shape[swap_ax]
+    new_lons = np.concatenate([np.arange(swap_len//2)+swap_len//2,np.arange(swap_len//2)])
+    if len(data.shape) > 1:
+        data_roll = AxRoll(data,swap_ax)
+        new_data  = data_roll[new_lons,:]
+        return AxRoll(new_data,swap_ax,invert=True)
+    else:
+        new_data = data[new_lons]
+        if is_dim:
+            if lower_bound is None:
+                lower_bound = new_data[0]
+            dl = np.diff(data)
+            return np.concatenate([[lower_bound],lower_bound+np.cumsum(dl)])
+        else:
+            return new_data
+        return new_data
+
+#######################################################
+def InvertCoordinate(data,axis=-1):
+    """
+        Invert the direction of a coordinate.
+
+        INPUTS:
+            data:  array to regrid
+            axis:  axis of coordinate to be inverted
+        OUTPUTS:
+            output: new array on newly arranged coordinate
+    """
+    if len(data.shape) > 1:
+        data_roll = AxRoll(data,axis)
+        return AxRoll(data_roll[-1::-1,:],axis,invert=True)
+    else:
+        return data[-1::-1]
