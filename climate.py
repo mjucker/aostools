@@ -489,7 +489,7 @@ def eof(X,n=1,detrend='constant'):
 
         INPUTS:
             X       -- Field, shape (time x space).
-            n       -- Number of modes to extract
+            n       -- Number of modes to extract. All modes if n < 0
             detrend -- detrend with global mean ('constant')
                           or linear trend ('linear')
         OUTPUTS:
@@ -516,6 +516,8 @@ def eof(X,n=1,detrend='constant'):
     # get the first n modes, in physical units
     #  we can either project the data onto the principal component, X*V
     #  or multiply u*s. This is the same, as U*S*V.H*V = U*S
+    if n < 0:
+        n = s.shape[0]
     EOF = np.dot(u[:,:n],np.diag(s)[:n,:n])
     # time evolution is in v
     PC  = v[:n,:]
@@ -581,8 +583,8 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='c
     # try to get the sign right
     # first possibility
     if choice == 'z':
-        minj = 70
-        maxj = 80
+        minj = min(sgn*70,sgn*80)
+        maxj = max(sgn*80,sgn*70)
         sig = -1
     else:
         minj = min(sgn*50,sgn*60)
