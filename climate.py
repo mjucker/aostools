@@ -1344,3 +1344,31 @@ def InvertCoordinate(data,axis=-1):
         return AxRoll(data_roll[-1::-1,:],axis,invert=True)
     else:
         return data[-1::-1]
+#######################################################
+def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
+    """
+        Invert the direction of latitude, and swap longitude domain
+         from -180,180 to 0,360.
+         Assumes an xr.DataArray.
+
+        INPUTS:
+            data:     xarray.DataArray to regrid
+            lon_name: name of longitude dimension
+            lat_name: name of latitude dimension
+        OUTPUTS:
+            data:     xarray.DataArray with latitude swapped and
+                       longitude from 0 to 360 degrees.
+    """
+    lon_ax = data.get_axis_num(lon_name)
+    lat_ax = data.get_axis_num(lat_name)
+    # invert the data array
+    dataswap = SwapDomain(data.values,lon_ax)
+    dataswap = InvertCoordinate(dataswap,lat_ax)
+    # we also want to invert the dimensions
+    lonswap = SwapDomain(data[lon_name].values,is_dim=True)
+    latswap = data[lat_name].values[::-1]
+    # now change the values in the xr.DataArray
+    data.values = dataswap
+    data[lon_name].values = lonswap
+    data[lat_name].values = latswap
+    return data
