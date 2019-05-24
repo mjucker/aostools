@@ -7,6 +7,46 @@
 
 ############################################################################################
 
+## find compression parameters as in ncpdq
+def DefCompress(x,varName=None):
+    # check whether x is a Dataset or DataArray
+    try:
+        keys = x.variables.keys()
+        is_dataset = True
+    except:
+        is_dataset = False
+    # make a list of variables
+    if varName is None:
+        vars = []
+        if is_dataset:
+            for var in x.variables.keys():
+                vars.append(var)#.encode("utf-8"))
+        else:
+            vars.append(x.name)#.encode("utf-8"))
+    else:
+        if isinstance(varName,list):
+            vars = varName
+        else:
+            vars = [varName]
+    # now loop over all variables
+    encodeDict = {}
+    bytes = 16
+    fillVal = -2**(bytes-1)
+    for var in vars:
+        if is_dataset:
+            dataMin = float(x[var].min())
+            dataMax = float(x[var].max())
+        else:
+            dataMin = float(x.min())
+            dataMax = float(x.max())
+        scale_factor=(dataMax - dataMin) / (2**bytes - 2)
+        add_offset = (dataMax + dataMin) / 2
+        encodeDict[var] = {
+            'dtype':'short',
+            'scale_factor':scale_factor,
+            'add_offset': add_offset,
+            '_FillValue': fillVal}
+    return encodeDict
 
 ## copy all dimensions from one file to the other
 def CopyDims(inFile, outFile, onlyDims=[]):
