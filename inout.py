@@ -6,7 +6,7 @@
 # This file provides helper functions that can be useful as pre-viz-processing of files and data
 
 ############################################################################################
-
+from __future__ import print_function
 ## find compression parameters as in ncpdq
 def DefCompress(x,varName=None):
     # check whether x is a Dataset or DataArray
@@ -220,8 +220,8 @@ def WriteGenericNc(dimensions, data, varName, outFileName='ncGeneric.nc',dimName
         vOut = outFile.createVariable(group+varName,'f4',dims,zlib=zlib,least_significant_digit=least_digit)
     vOut[:] = data
     outFile.close()
-    print text+' file '+outFileName
-    print 'Used dimensions '+str(dims)
+    print( text+' file '+outFileName )
+    print( 'Used dimensions '+str(dims) )
 #
 # write a new file, with the same structure as an existing file
 #  or add data to existing file
@@ -260,9 +260,9 @@ def WriteFileLike(data, varName, outFileName, dimNames, inFileName):
     outVar[:] = data
     outFile.close()
     if outFileName != inFileName:
-        print 'Done, written file '+outFileName
+        print( 'Done, written file '+outFileName )
     else:
-        print 'Done, appended variable to '+outFileName
+        print( 'Done, appended variable to '+outFileName )
 
 ## Read a file, and show the variables contained in it
 #
@@ -283,18 +283,18 @@ def ReadFile(fileName, show='silent', mode='r'):
         raise IOError('File '+fileName+' does not exist')
     file=nc.Dataset(fileName,mode)
     if show != 'silent':
-        print 'All variables:',file.variables.keys()
+        print( 'All variables:',file.variables.keys() )
         for g in file.groups.keys():
-            print '              ','group '+g+':'
-            print '              ',file.groups[g].variables.keys()
+            print( '              ','group '+g+':' )
+            print( '              ',file.groups[g].variables.keys() )
     if show == 'full':
         for v in file.variables.keys():
             if v not in file.dimensions:
-                print file.variables[v]
+                print( file.variables[v] )
         for g in file.groups.keys():
             for v in file.groups[g].variables.keys():
                 if v not in file.dimensions:
-                    print g+'/'+file.variables[v]
+                    print( g+'/'+file.variables[v] )
     return file
 
 
@@ -348,7 +348,7 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
             tmpVar = tmpVar.mean(axis=meanAxis)
         tmpVars[var] = tmpVar[:]
     file.close()
-    print 'done with file',fileList[0]
+    print( 'done with file',fileList[0] )
 
     # finally, add all other files
     for f in fileList[1:]:
@@ -362,7 +362,7 @@ def CombineFiles(fileList, fileName, combineAxis=0, combineDim='time', meanAxis=
             else:
                 tmpVars[var] = np.concatenate((tmpVars[var],tmpVar),axis=combineAxis)
         file.close()
-        print 'done with file',f
+        print( 'done with file',f )
     #
     # and put all of it into the new file
     outFile.variables[combineDim][:] = tmpVars[combineDim][:]
