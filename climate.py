@@ -11,6 +11,18 @@ from __future__ import print_function
 import numpy as np
 # from numba import jit
 
+## helper function: Get actual width and height of axes
+def GetAxSize(fig,ax,dpi=False):
+	"""get width and height of a given axis.
+	   output is in inches if dpi=False, in dpi if dpi=True
+	"""
+	bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+	width, height = bbox.width, bbox.height
+	if dpi:
+		width *= fig.dpi
+		height *= fig.dpi
+	return width, height
+
 ## helper function: check if string contained in list (set) of strings
 def CheckAny(string,set):
 	for c in set:
@@ -823,6 +835,86 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True):
+	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
+		x,y,ep1,ep2 assumed to be xarray.DataArrays.
+
+	INPUTS:
+		x       : horizontal coordinate, assumed in degrees (latitude) [degrees]
+		y       : vertical coordinate, any units, but usually this is pressure or height
+		ep1     : horizontal Eliassen-Palm flux component, in [m2/s2]. Typically, this is ep1_cart from
+		           ComputeEPfluxDiv()
+		ep2     : vertical Eliassen-Palm flux component, in [U.m/s2], where U is the unit of y.
+			       Typically, this is ep2_cart from ComputeEPfluxDiv(), in [hPa.m/s2] and y is pressure [hPa].
+		fig     : a matplotlib figure object. This figure contains the axes ax.
+		ax      : a matplotlib axes object. This is where the arrows will be plotted onto.
+		xlim    : axes limits in x-direction. If None, use [min(x),max(x)]. [None]
+		ylim    : axes limits in y-direction. If None, use [min(y),max(y)]. [None]
+		xscale  : x-axis scaling. currently only 'linear' is supported. ['linear']
+		yscale  : y-axis scaling. 'linear' or 'log' ['linear']
+		invert_y: invert y-axis (for pressure coordinates). [True]
+
+	OUTPUTS:
+	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
+	   Fp*dy   : y-component of properly scaled arrows. Units of [m3.inches]
+	"""
+	import numpy as np
+	import matplotlib.pyplot as plt
+	#
+	def Deltas(z,zlim):
+		if zlim is None:
+			return np.max(z)-np.min(z)
+		else:
+			return np.abs(zlim[1]-zlim[0])
+	# Scale EP vector components as in Edmon, Hoskins & McIntyre JAS 1980:
+	cosphi = np.cos(np.deg2rad(x))
+	a0 = 6376000.0 # Earth radius [m]
+	grav = 9.81
+	# first scaling: Edmon et al (1980), Eqs. 3.1 & 3.13
+	Fphi = 2*np.pi/grav*cosphi**2*a0**2*ep1 # [m3.rad]
+	Fp   = 2*np.pi/grav*cosphi**2*a0**3*ep2 # [m3.hPa]
+	#
+	# Now comes what Edmon et al call "distances occupied by 1 radian of
+	#  latitude and 1 [hecto]pascal of pressure on the diagram."
+	# These distances depend on figure aspect ratio and axis scale
+	#
+	# first, get the axis width and height for
+	#  correct aspect ratio
+	width,height = GetAxSize(fig,ax)
+	# we use min(),max(), but note that if the actual axis limits
+	#  are different, this will be slightly wrong.
+	delta_x = Deltas(x,xlim)
+	delta_y = Deltas(y,ylim)
+
+	#scale the x-axis:
+	if xscale == 'linear':
+		dx = width/delta_x/np.pi*180
+	else:
+		raise ValueError('ONLY LINEAR X-AXIS IS SUPPORTED AT THE MOMENT')
+	#scale the y-axis:
+	if invert_y:
+		y_sign = -1
+	else:
+		y_sign = 1
+	if yscale == 'linear':
+		dy = y_sign*height/delta_y
+	elif yscale == 'log':
+		dy = y_sign*height/np.log(10)/y/np.log10(np.max(y)/np.min(y))
+	#
+	# plot the arrows onto axis
+	ax.quiver(x,y,Fphi.transpose()*dx,Fp.transpose()*dy,angles='uv')
+	if invert_y:
+		ax.invert_yaxis()
+	if xlim is not None:
+		ax.set_xlim(xlim)
+	if ylim is not None:
+		ax.set_ylim(ylim)
+	ax.set_yscale(yscale)
+	ax.set_xscale(xscale)
+	#
+	return Fphi*dx,Fp*dy
+
+##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	"""Compute cosine weighted meridional average from lim to mx.
 
@@ -1358,22 +1450,48 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 
 		INPUTS:
 			data:     xarray.DataArray to regrid
-			lon_name: name of longitude dimension
-			lat_name: name of latitude dimension
+			lon_name: name of longitude dimension. Set to None if nothing should be done.
+			lat_name: name of latitude dimension. Set to None if nothing should be done.
 		OUTPUTS:
 			data:     xarray.DataArray with latitude swapped and
 					   longitude from 0 to 360 degrees.
 	"""
-	lon_ax = data.get_axis_num(lon_name)
-	lat_ax = data.get_axis_num(lat_name)
+	if lon_name is not None:
+		lon_ax = data.get_axis_num(lon_name)
+	if lat_name is not None:
+		lat_ax = data.get_axis_num(lat_name)
 	# invert the data array
-	dataswap = SwapDomain(data.values,lon_ax)
-	dataswap = InvertCoordinate(dataswap,lat_ax)
+	if lon_name is None:
+		dataswap = data.values
+	else:
+		dataswap = SwapDomain(data.values,lon_ax)
+	if lat_name is not None:
+		dataswap = InvertCoordinate(dataswap,lat_ax)
 	# we also want to invert the dimensions
-	lonswap = SwapDomain(data[lon_name].values,is_dim=True)
-	latswap = data[lat_name].values[::-1]
+	if lon_name is not None:
+		lonswap = SwapDomain(data[lon_name].values,is_dim=True)
+		data[lon_name].values = lonswap
+	if lat_name is not None:
+		latswap = data[lat_name].values[::-1]
+		data[lat_name].values = latswap
 	# now change the values in the xr.DataArray
 	data.values = dataswap
-	data[lon_name].values = lonswap
-	data[lat_name].values = latswap
 	return data
+
+#######################################################
+def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
+	"""
+		Compute u,v from geostrophic balance
+		Z is geopotential height
+	"""
+	import numpy as np
+	a0 = 6376.0e3
+	Omega = 7.292e-5
+	grav = 9.81
+	# f = 0 at the equator, which will obviously be a problem
+	#  so we make f=infty there so that u,v = 0 between -qg_limit and +qg_limit
+	f = 2*Omega*np.sin(np.deg2rad(Z[lat_name])).where(np.abs(Z[lat_name])>qg_limit,np.infty)
+	cosPhi = np.cos(np.deg2rad(Z[lat_name]))
+	u = -grav*Z.differentiate(lat_name)/f/a0
+	v =  grav*Z.differentiate(lon_name)/f/a0/cosPhi
+	return u,v
