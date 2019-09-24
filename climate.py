@@ -1388,93 +1388,27 @@ def Convert2Days(time,units,calendar):
 	return t.date2num(date)
 
 #######################################################
-def SwapDomain(data,swap_ax=-1,is_dim=False,lower_bound=None):
-	"""
-		Swap first and second halves of a domain along a given axis.
-		Typically, this is uesed to convert a grid back and forth
-		from -180 to 180 into 0 to 360 in longitude.
-
-		INPUTS:
-			data:        array to regrid
-			swap_ax:     axis of along which to swap
-			is_dim:      data is the coordinate along which to swap.
-						  In that case, the values have to be changed.
-			lower_bound: if is_dim=True, where should the dimension start?
-						  if None (default), will start from midpoint
-		OUTPUTS:
-			new_data: new array on newly arranged grid
-	"""
-	if is_dim and len(data.shape) > 1:
-		raise ValueError('INPUT DATA CANNOT BE DIMENSION (NUM(DIMS)!=1)')
-	swap_len = data.shape[swap_ax]
-	new_lons = np.concatenate([np.arange(swap_len//2)+swap_len//2,np.arange(swap_len//2)])
-	if len(data.shape) > 1:
-		data_roll = AxRoll(data,swap_ax)
-		new_data  = data_roll[new_lons,:]
-		return AxRoll(new_data,swap_ax,invert=True)
-	else:
-		new_data = data[new_lons]
-		if is_dim:
-			if lower_bound is None:
-				lower_bound = new_data[0]
-			dl = np.diff(data)
-			return np.concatenate([[lower_bound],lower_bound+np.cumsum(dl)])
-		else:
-			return new_data
-		return new_data
-
-#######################################################
-def InvertCoordinate(data,axis=-1):
-	"""
-		Invert the direction of a coordinate.
-
-		INPUTS:
-			data:  array to regrid
-			axis:  axis of coordinate to be inverted
-		OUTPUTS:
-			output: new array on newly arranged coordinate
-	"""
-	if len(data.shape) > 1:
-		data_roll = AxRoll(data,axis)
-		return AxRoll(data_roll[-1::-1,:],axis,invert=True)
-	else:
-		return data[-1::-1]
-#######################################################
 def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	"""
 		Invert the direction of latitude, and swap longitude domain
 		 from -180,180 to 0,360.
-		 Assumes an xr.DataArray.
+		 Assumes an xr.DataArray or xr.Dataset.
 
 		INPUTS:
-			data:     xarray.DataArray to regrid
-			lon_name: name of longitude dimension. Set to None if nothing should be done.
-			lat_name: name of latitude dimension. Set to None if nothing should be done.
+			data:      xarray.DataArray or xarray.Dataset to regrid
+			lon_name:  name of longitude dimension. Set to None if nothing should be done.
+			lat_name:  name of latitude dimension. Set to None if nothing should be done.
 		OUTPUTS:
 			data:     xarray.DataArray with latitude swapped and
 					   longitude from 0 to 360 degrees.
 	"""
+	if lat_name is not None:
+		data = data.interp({lat_name:data[lat_name][::-1]},method='nearest')
 	if lon_name is not None:
-		lon_ax = data.get_axis_num(lon_name)
-	if lat_name is not None:
-		lat_ax = data.get_axis_num(lat_name)
-	# invert the data array
-	if lon_name is None:
-		dataswap = data.values
-	else:
-		dataswap = SwapDomain(data.values,lon_ax)
-	if lat_name is not None:
-		dataswap = InvertCoordinate(dataswap,lat_ax)
-	# we also want to invert the dimensions
-	if lon_name is not None:
-		lonswap = SwapDomain(data[lon_name].values,is_dim=True)
-		data[lon_name].values = lonswap
-	if lat_name is not None:
-		latswap = data[lat_name].values[::-1]
-		data[lat_name].values = latswap
-	# now change the values in the xr.DataArray
-	data.values = dataswap
-	return data
+		data_low = data.sel({lon_name: slice(0,180)})
+		data_neg = data.sel({lon_name: slice(-180,-0.001)})
+		data_neg[lon_name] += 360
+	return data.sortby(lon_name)
 
 #######################################################
 def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
@@ -1493,3 +1427,34 @@ def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5
 	u = -grav*Z.differentiate(lat_name)/f/a0
 	v =  grav*Z.differentiate(lon_name)/f/a0/cosPhi
 	return u,v
+
+#######################################################
+def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_args=None):
+	"""
+		Create a new figure with a given projection. To plot data, invoke:
+			fig,ax,kw = Projection()
+			ax.contourf(x,y,z,**kw)
+
+		INPUTS:
+			projection:  desired map projection for plotting.
+			transform:   map projection of the data.
+			coast:       whether or not to draw coastlines (can be done later with ax.coastines())
+			kw_args:     keyword arguments (dict()) for projection.
+
+		OUTPUTS:
+			fig:         figure object
+			ax:          axis with map projection
+			transf:      transform in form of dictionary.
+	"""
+	from cartopy import crs as ccrs
+	cproj = getattr(ccrs,projection)
+	if kw_args is None:
+		proj = cproj()
+	else:
+		proj = cproj(**kw_args)
+	from matplotlib import pyplot as plt
+	fig = plt.figure()
+	ax  = plt.axes(projection=proj)
+	if coast:
+		ax.coastlines()
+	return fig,ax,{'transform':getattr(ccrs,transform)}
