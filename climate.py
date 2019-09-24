@@ -1070,6 +1070,8 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 		Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
 		Stationary waves are assumed, ie c=0.
 
+		Setting k=0 means the only term depending on wave number is left out. This could be more efficient if n2(k) for different values of k is of interest.
+
 		meridonal PV gradient is
 		q_\phi = A - B + C, where
 				A = 2*Omega*cos\phi
@@ -1086,7 +1088,7 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 			pres  - pressure [hPa]
 			uz    - zonal mean zonal wind, dimension pres x lat [m/s]
 			Tz    - zonal mean temperature, dimension pres x lat [K]
-			k     - zonal wave number [.]
+			k     - zonal wave number. [.]
 			N2const - if not None, assume N2 = const = N2const [1/s2]
 		Outputs are:
 			n2  - refractive index, dimension pres x lat [.]
