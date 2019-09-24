@@ -835,7 +835,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True):
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
@@ -853,19 +853,23 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		xscale  : x-axis scaling. currently only 'linear' is supported. ['linear']
 		yscale  : y-axis scaling. 'linear' or 'log' ['linear']
 		invert_y: invert y-axis (for pressure coordinates). [True]
+		newax   : plot on second y-axis. [False]
+		pivot   : keyword argument for quiver() ['tail']
+		scale   : keyword argument for quiver() [None]
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
 	   Fp*dy   : y-component of properly scaled arrows. Units of [m3.inches]
+	   ax   : secondary y-axis if newax == True
 	"""
 	import numpy as np
 	import matplotlib.pyplot as plt
 	#
 	def Deltas(z,zlim):
-		if zlim is None:
-			return np.max(z)-np.min(z)
-		else:
-			return np.abs(zlim[1]-zlim[0])
+		# if zlim is None:
+		return np.max(z)-np.min(z)
+		# else:
+			# return zlim[1]-zlim[0]
 	# Scale EP vector components as in Edmon, Hoskins & McIntyre JAS 1980:
 	cosphi = np.cos(np.deg2rad(x))
 	a0 = 6376000.0 # Earth radius [m]
@@ -885,7 +889,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	#  are different, this will be slightly wrong.
 	delta_x = Deltas(x,xlim)
 	delta_y = Deltas(y,ylim)
-
+	#
 	#scale the x-axis:
 	if xscale == 'linear':
 		dx = width/delta_x/np.pi*180
@@ -902,7 +906,16 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		dy = y_sign*height/np.log(10)/y/np.log10(np.max(y)/np.min(y))
 	#
 	# plot the arrows onto axis
-	ax.quiver(x,y,Fphi.transpose()*dx,Fp.transpose()*dy,angles='uv')
+	quivArgs = {'angles':'uv','scale_units':'inches','pivot':pivot}
+	if scale is not None:
+		quivArgs['scale'] = scale
+	if newax:
+		ax = ax.twinx()
+		ax.set_ylabel('pressure [hPa]')
+	try:
+		ax.quiver(x,y,Fphi*dx,Fp*dy,**quivArgs)
+	except:
+		ax.quiver(x,y,Fphi.transpose()*dx,Fp.transpose()*dy,**quivArgs)
 	if invert_y:
 		ax.invert_yaxis()
 	if xlim is not None:
@@ -912,7 +925,10 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	ax.set_yscale(yscale)
 	ax.set_xscale(xscale)
 	#
-	return Fphi*dx,Fp*dy
+	if newax:
+		return Fphi*dx,Fp*dy,ax
+	else:
+		return Fphi*dx,Fp*dy
 
 ##############################################################################################
 def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
