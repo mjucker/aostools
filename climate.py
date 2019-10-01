@@ -1475,4 +1475,4 @@ def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_ar
 	ax  = plt.axes(projection=proj)
 	if coast:
 		ax.coastlines()
-	return fig,ax,{'transform':getattr(ccrs,transform)}
+	return fig,ax,{'transform':getattr(ccrs,transform)()}
