@@ -9,6 +9,16 @@
 from __future__ import print_function
 ## find compression parameters as in ncpdq
 def DefCompress(x,varName=None):
+    """Produce encoding dictionary for to_netcdf(encoding=encodeDict).
+
+        INPUTS:
+            x       : either a xarray.DataArray or xarray.Dataset
+            varName : only encode that variable. If None, encode all variables
+        OUTPUTS:
+            encodeDict : dictionary containing compressing information for each
+                          variable. To be used as x.to_netcdf(encoding=encodeDict)
+    """
+    import numpy as np
     # check whether x is a Dataset or DataArray
     try:
         keys = x.variables.keys()
@@ -34,11 +44,13 @@ def DefCompress(x,varName=None):
     fillVal = -2**(bytes-1)
     for var in vars:
         if is_dataset:
-            dataMin = float(x[var].min())
-            dataMax = float(x[var].max())
+            filtr = np.isfinite(x[var])
+            dataMin = x[var].where(filtr).min().values
+            dataMax = x[var].where(filtr).max().values
         else:
-            dataMin = float(x.min())
-            dataMax = float(x.max())
+            filtr = np.isfinite(x)
+            dataMin = x.where(filtr).min().values
+            dataMax = x.where(filtr).max().values
         scale_factor=(dataMax - dataMin) / (2**bytes - 2)
         add_offset = (dataMax + dataMin) / 2
         encodeDict[var] = {

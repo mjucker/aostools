@@ -729,6 +729,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
 		return w_bar + np.squeeze(R*vt_bar)
 	else:
 		return w_bar + R*vt_bar
+
 ##############################################################################################
 def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	""" Compute the EP-flux vectors and divergence terms.
@@ -835,6 +836,116 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
+def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False):
+    '''
+        Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
+        Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
+        This is 3D wave flux in a non-zonally symmetric base flow, optionally QG approximated.
+        Inputs are xarray DataArrays.
+        Latitude, longitude in degrees, pressure in hPa.
+
+        INPUTS:
+        phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
+        phiref_or_v: reference geopotential [m2/s2] (qg = True)
+                        OR (full) meridional wind [m/s] (qg = False)
+        uref       : reference zonal wind [m/s]
+        vref       : reference meridional wind [m/s]
+        lat        : name of latitude in DataArrays
+        lon        : name of longitude in DataArrays
+        pres       : name of pressure in DataArrays [hPa]
+        tref       : reference temperature [K] for static stability parameter S2.
+                       If None, only compute horizontal wave flux.
+                       Else, used to compute S2.
+                         If xr.Dataset or xr.DataArray, compute S2 assuming tref is temperature [K].
+                         Else, assume S2 = tref.
+                         Note that S2 should be a function of
+                          pressure only (see Vallis 2017, Eq 5.127)
+        qg         : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
+                       Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
+        OUTPUTS:
+        Wx,Wy    : Activity Vectors along lon [m2/s2], lat [m2/s2]
+        Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
+        '''
+    import numpy as np
+    from xarray import DataArray
+    for var in [phi_or_u,uref,vref,phiref_or_v,tref]:
+        if not isinstance(var,DataArray):
+            if var is None or np.isscalar(var):
+                pass
+            else:
+                raise ValueError('all inputs have to be xarray.DataArrays!')
+    a0 = 6376000.0
+    Rd = 287.04
+    kappa = 2./7
+    p0 = 1.e3
+    radlat = np.deg2rad(phi_or_u[lat])
+    coslat = np.cos(radlat)
+    one_over_coslat2 = coslat**(-2)
+    one_over_a2 = a0**(-2)
+    mag_u = np.sqrt(uref**2+vref**2)
+    f  = 2*2*np.pi/86400.*np.sin(radlat)
+
+    if qg:
+        psi = (phi_or_u-phiref_or_v)/f
+    else:
+        from windspharm.xarray import VectorWind
+        psi = VectorWind(phi_or_u-uref,phiref_or_v-vref).streamfunction()
+
+    # psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
+    dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+    dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+    d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
+    d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
+    d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
+
+    wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+        + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+    wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+        + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
+
+    coeff = coslat/2/mag_u
+
+    rad2deg = 180/np.pi
+
+    # get the vectors in physical units of m2/s2, correcting for radians vs. degrees
+    wx = coeff*wx*rad2deg*rad2deg
+    wy = coeff*wy*rad2deg*rad2deg
+
+    wx.name = 'wx'
+    wx.attrs['units'] = 'm2/s2'
+    wy.name = 'wy'
+    wy.attrs['units'] = 'm2/s2'
+
+    if tref is None:
+        return wx,wy
+    else:
+        # psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
+        dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num)
+        d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2)
+        d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2)
+        # S2 = -\alpha*\partial_p\ln\theta, \alpha = 1/\rho = Rd*T/p
+        #    = R/p*(p/p0)**\kappa d\theta/dp, Vallis (2017, p. 192 (eq. 5.127))
+        #  this should be a reference profile and a function of pressure only!
+        pressure = uref[pres]
+        if isinstance(tref,Dataset) or isinstance(tref,DataArray):
+            pp0 = (p0/pressure)**kappa
+            theta = pp0*tref
+            S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2)
+            # S2 = ExtractArray(S2)
+            # S2 = S2.where(S2>1e-7,1e-7) # avoid division by zero
+        else:
+            S2 = tref
+
+        wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+
+        wz = coeff*wz*rad2deg
+        # wz = ExtractArray(wz)
+        wz.name = 'wz'
+        wz.attrs['units'] = 'hPa.m/s2'
+
+        return wx,wy,wz
+
+##############################################################################################
 def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
@@ -903,7 +1014,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	if yscale == 'linear':
 		dy = y_sign*height/delta_y
 	elif yscale == 'log':
-		dy = y_sign*height/np.log(10)/y/np.log10(np.max(y)/np.min(y))
+		dy = y_sign*height/y/np.log(np.max(y)/np.min(y))
 	#
 	# plot the arrows onto axis
 	quivArgs = {'angles':'uv','scale_units':'inches','pivot':pivot}
@@ -915,7 +1026,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	try:
 		ax.quiver(x,y,Fphi*dx,Fp*dy,**quivArgs)
 	except:
-		ax.quiver(x,y,Fphi.transpose()*dx,Fp.transpose()*dy,**quivArgs)
+		ax.quiver(x,y,dx*Fphi.transpose(),dy*Fp.transpose(),**quivArgs)
 	if invert_y:
 		ax.invert_yaxis()
 	if xlim is not None:
