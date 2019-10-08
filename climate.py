@@ -837,113 +837,128 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 
 ##############################################################################################
 def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False):
-    '''
-        Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
-        Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
-        This is 3D wave flux in a non-zonally symmetric base flow, optionally QG approximated.
-        Inputs are xarray DataArrays.
-        Latitude, longitude in degrees, pressure in hPa.
+	'''
+		Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
+		Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
+		This is 3D wave flux in a non-zonally symmetric base flow, optionally QG approximated.
+		Inputs are xarray DataArrays.
+		Latitude, longitude in degrees, pressure in hPa.
 
-        INPUTS:
-        phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
-        phiref_or_v: reference geopotential [m2/s2] (qg = True)
-                        OR (full) meridional wind [m/s] (qg = False)
-        uref       : reference zonal wind [m/s]
-        vref       : reference meridional wind [m/s]
-        lat        : name of latitude in DataArrays
-        lon        : name of longitude in DataArrays
-        pres       : name of pressure in DataArrays [hPa]
-        tref       : reference temperature [K] for static stability parameter S2.
-                       If None, only compute horizontal wave flux.
-                       Else, used to compute S2.
-                         If xr.Dataset or xr.DataArray, compute S2 assuming tref is temperature [K].
-                         Else, assume S2 = tref.
-                         Note that S2 should be a function of
-                          pressure only (see Vallis 2017, Eq 5.127)
-        qg         : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
-                       Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
-        OUTPUTS:
-        Wx,Wy    : Activity Vectors along lon [m2/s2], lat [m2/s2]
-        Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
-        '''
-    import numpy as np
-    from xarray import DataArray
-    for var in [phi_or_u,uref,vref,phiref_or_v,tref]:
-        if not isinstance(var,DataArray):
-            if var is None or np.isscalar(var):
-                pass
-            else:
-                raise ValueError('all inputs have to be xarray.DataArrays!')
-    a0 = 6376000.0
-    Rd = 287.04
-    kappa = 2./7
-    p0 = 1.e3
-    radlat = np.deg2rad(phi_or_u[lat])
-    coslat = np.cos(radlat)
-    one_over_coslat2 = coslat**(-2)
-    one_over_a2 = a0**(-2)
-    mag_u = np.sqrt(uref**2+vref**2)
-    f  = 2*2*np.pi/86400.*np.sin(radlat)
+		INPUTS:
+		phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
+		phiref_or_v: reference geopotential [m2/s2] (qg = True)
+						OR (full) meridional wind [m/s] (qg = False)
+		uref       : reference zonal wind [m/s]
+		vref       : reference meridional wind [m/s]
+		lat        : name of latitude in DataArrays
+		lon        : name of longitude in DataArrays
+		pres       : name of pressure in DataArrays [hPa]
+		tref       : reference temperature [K] for static stability parameter S2.
+					   If None, only compute horizontal wave flux.
+					   Else, used to compute S2.
+						 If xr.Dataset or xr.DataArray, compute S2 assuming tref is temperature [K].
+						 Else, assume S2 = tref.
+						 Note that S2 should be a function of
+						  pressure only (see Vallis 2017, Eq 5.127)
+		qg         : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
+					   Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
+		OUTPUTS:
+		Wx,Wy    : Activity Vectors along lon [m2/s2], lat [m2/s2]
+		Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
+		div      : Divergence of Wave Activity Flux [m/s/day]
+		'''
+	import numpy as np
+	from xarray import DataArray
+	for var in [phi_or_u,uref,vref,phiref_or_v,tref]:
+		if not isinstance(var,DataArray):
+			if var is None or np.isscalar(var):
+				pass
+			else:
+				raise ValueError('all inputs have to be xarray.DataArrays!')
+	a0 = 6376000.0
+	Rd = 287.04
+	kappa = 2./7
+	p0 = 1.e3
+	radlat = np.deg2rad(phi_or_u[lat])
+	coslat = np.cos(radlat)
+	one_over_coslat2 = coslat**(-2)
+	one_over_a2 = a0**(-2)
+	mag_u = np.sqrt(uref**2 + vref**2)
+	f  = 2*2*np.pi/86400.*np.sin(radlat)
 
-    if qg:
-        psi = (phi_or_u-phiref_or_v)/f
-    else:
-        from windspharm.xarray import VectorWind
-        psi = VectorWind(phi_or_u-uref,phiref_or_v-vref).streamfunction()
+	if qg:
+		psi = (phi_or_u-phiref_or_v)/f
+	else:
+		try:
+			from windspharm.xarray import VectorWind
+		except:
+			raise ValueError("This needs the windspharm package. You can still use this function without it, but you need to set qg=False.")
+		psi = VectorWind(phi_or_u-uref,phiref_or_v-vref).streamfunction()
 
-    # psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
-    dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-    dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-    d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
-    d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
-    d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
+	# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
+	dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+	dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+	d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
+	d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
+	d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
 
-    wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
-        + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-    wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
-        + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
+	wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+		+ vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+	wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+		+ vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-    coeff = coslat/2/mag_u
+	coeff = coslat/2/mag_u
 
-    rad2deg = 180/np.pi
+	rad2deg = 180/np.pi
 
-    # get the vectors in physical units of m2/s2, correcting for radians vs. degrees
-    wx = coeff*wx*rad2deg*rad2deg
-    wy = coeff*wy*rad2deg*rad2deg
+	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
+	wx = coeff*wx*rad2deg*rad2deg
+	wy = coeff*wy*rad2deg*rad2deg
 
-    wx.name = 'wx'
-    wx.attrs['units'] = 'm2/s2'
-    wy.name = 'wy'
-    wy.attrs['units'] = 'm2/s2'
+	wx.name = 'wx'
+	wx.attrs['units'] = 'm2/s2'
+	wy.name = 'wy'
+	wy.attrs['units'] = 'm2/s2'
+	#
+	# Now compute the divergence
+	div1 = 1/a0/coslat*wx.differentiate(lon,edge_order=2)*rad2deg
+	div2 = 1/a0/coslat*(wy*coslat).differentiate(lat,edge_order=2)
 
-    if tref is None:
-        return wx,wy
-    else:
-        # psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
-        dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num)
-        d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2)
-        d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2)
-        # S2 = -\alpha*\partial_p\ln\theta, \alpha = 1/\rho = Rd*T/p
-        #    = R/p*(p/p0)**\kappa d\theta/dp, Vallis (2017, p. 192 (eq. 5.127))
-        #  this should be a reference profile and a function of pressure only!
-        pressure = uref[pres]
-        if isinstance(tref,Dataset) or isinstance(tref,DataArray):
-            pp0 = (p0/pressure)**kappa
-            theta = pp0*tref
-            S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2)
-            # S2 = ExtractArray(S2)
-            # S2 = S2.where(S2>1e-7,1e-7) # avoid division by zero
-        else:
-            S2 = tref
+	if tref is None:
+		div = (div1+div2)*86400
+		div.name = 'div'
+		div.attrs['units'] = 'm/s/d'
+		return wx,wy,div
+	else:
+		# psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
+		dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num)
+		d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2)
+		d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2)
+		# S2 = -\alpha*\partial_p\ln\theta, \alpha = 1/\rho = Rd*T/p
+		#    = R/p*(p/p0)**\kappa d\theta/dp, Vallis (2017, p. 192 (eq. 5.127))
+		#  this should be a reference profile and a function of pressure only!
+		pressure = uref[pres]
+		if isinstance(tref,DataArray):
+			pp0 = (p0/pressure)**kappa
+			theta = pp0*tref
+			S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2)
+			# S2 = S2.where(S2>1e-7,1e-7) # avoid division by zero
+		else:
+			S2 = tref
 
-        wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
 
-        wz = coeff*wz*rad2deg
-        # wz = ExtractArray(wz)
-        wz.name = 'wz'
-        wz.attrs['units'] = 'hPa.m/s2'
+		wz = coeff*wz*rad2deg
 
-        return wx,wy,wz
+		wz.name = 'wz'
+		wz.attrs['units'] = 'hPa.m/s2'
+
+		div3 = wz.differentiate(pres,edge_order=2)
+		div = (div1+div2+div3)*86400
+		div.name = 'div'
+		div.attrs['units'] = 'm/s/d'
+
+		return wx,wy,wz,div
 
 ##############################################################################################
 def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
@@ -954,9 +969,9 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		x       : horizontal coordinate, assumed in degrees (latitude) [degrees]
 		y       : vertical coordinate, any units, but usually this is pressure or height
 		ep1     : horizontal Eliassen-Palm flux component, in [m2/s2]. Typically, this is ep1_cart from
-		           ComputeEPfluxDiv()
+				   ComputeEPfluxDiv()
 		ep2     : vertical Eliassen-Palm flux component, in [U.m/s2], where U is the unit of y.
-			       Typically, this is ep2_cart from ComputeEPfluxDiv(), in [hPa.m/s2] and y is pressure [hPa].
+				   Typically, this is ep2_cart from ComputeEPfluxDiv(), in [hPa.m/s2] and y is pressure [hPa].
 		fig     : a matplotlib figure object. This figure contains the axes ax.
 		ax      : a matplotlib axes object. This is where the arrows will be plotted onto.
 		xlim    : axes limits in x-direction. If None, use [min(x),max(x)]. [None]
@@ -1587,3 +1602,63 @@ def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_ar
 	if coast:
 		ax.coastlines()
 	return fig,ax,{'transform':getattr(ccrs,transform)()}
+
+#######################################################
+def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1e3):
+	"""
+		Convert 3D vector (u,v,w) from Cartesian coordinates to
+			spherical coordinates for correct plotting on a 3D sphere.
+		Also converts pressure into height if pres is a string with the
+			name of the pressure coordinate. Note that this will also transform
+			the vertical component w.
+		u,v,w must be xarray.DataArrays, and longitude, latitude in degrees.
+
+		INPUTS:
+			u,v,w   : x-, y-, and z-components of Cartesian vector
+			lon,lat : names of longitude and latitude in DataArray u.
+						Angles are in degrees.
+			pres    : None: don't do anything with the vertical coodinate
+					  string: name of pressure coordinate. Will then be converted
+					  		  to log-pressure with a scale height of H and a base
+							  pressure of p0.
+			H       : Scale height. A priori, this is in meters. But this parameter
+						can be used to adjust for aspect ratio. For instance, if one
+						wants more detail in the vertical, making H 10x larger results
+						in a 10x "deeper" atmosphere with respect to Earth's radius.
+			p0      : Base pressure. This should probably never be changed.
+
+	"""
+	from xarray import DataArray
+	for var in [u,v,w]:
+		if not isinstance(var,DataArray):
+			raise ValueError('u,v,w must be xarray DataArrays!')
+	import numpy as np
+	radlat = np.deg2rad(u[lat])
+	radlon = np.deg2rad(u[lon])
+	coslat = np.cos(radlat)
+	sinlat = np.sin(radlat)
+	coslon = np.cos(radlon)
+	sinlon = np.sin(radlon)
+	# pressure to height
+	if pres is not None:
+		c = H*np.log(u[pres]/(u[pres]+w))
+	else:
+		c = w
+	# transform vector into spherical geometry
+	a = -u*sinlon -v*sinlat*coslon +c*coslat*coslon
+	b =  u*coslon -v*sinlat*sinlon +c*coslat*sinlon
+	c =            v*coslat        +c*sinlat
+	a.name = u.name
+	b.name = v.name
+	c.name = w.name
+	if pres is None:
+		return a,b,c
+	# also change the vertical coordinate from pressure to height (log-pressure)
+	z = -H*np.log(u[pres]/p0).values
+	a[pres].values = z
+	b[pres].values = z
+	c[pres].values = z
+	a = a.rename({pres:'z'})
+	b = b.rename({pres:'z'})
+	c = c.rename({pres:'z'})
+	return a,b,c
