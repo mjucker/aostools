@@ -981,7 +981,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		invert_y: invert y-axis (for pressure coordinates). [True]
 		newax   : plot on second y-axis. [False]
 		pivot   : keyword argument for quiver() ['tail']
-		scale   : keyword argument for quiver() [None]
+		scale   : keyword argument for quiver(). Smaller is longer [None]
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
@@ -1039,9 +1039,12 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		ax = ax.twinx()
 		ax.set_ylabel('pressure [hPa]')
 	try:
-		ax.quiver(x,y,Fphi*dx,Fp*dy,**quivArgs)
+		Q = ax.quiver(x,y,Fphi*dx,Fp*dy,**quivArgs)
 	except:
-		ax.quiver(x,y,dx*Fphi.transpose(),dy*Fp.transpose(),**quivArgs)
+		Q = ax.quiver(x,y,dx*Fphi.transpose(),dy*Fp.transpose(),**quivArgs)
+	fig.canvas.draw() # need to update the plot to get the Q.scale
+	U = Q.scale
+	ax.quiverkey(Q,0.9,1.02,U/width,label=r'{0:.1e}$\,m^3$'.format(U),labelpos='E',coordinates='axes')
 	if invert_y:
 		ax.invert_yaxis()
 	if xlim is not None:
