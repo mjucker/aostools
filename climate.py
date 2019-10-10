@@ -886,30 +886,46 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	mag_u = np.sqrt(uref**2 + vref**2)
 	f  = 2*2*np.pi/86400.*np.sin(radlat)
 
+	try:
+		from windspharm.xarray import VectorWind
+		has_windspharm = True
+	except:
+		has_windspharm = False
+
+
 	if qg:
 		psi = (phi_or_u-phiref_or_v)/f
 	else:
-		try:
-			from windspharm.xarray import VectorWind
-		except:
+		if not has_windspharm:
 			raise ValueError("This needs the windspharm package. You can still use this function without it, but you need to set qg=False.")
-		psi = VectorWind(phi_or_u-uref,phiref_or_v-vref).streamfunction()
+		vw = VectorWind(phi_or_u-uref,phiref_or_v-vref)
+		psi = vw.streamfunction()
+	if has_windspharm:
+		dpsi_dlon,dpsi_dlat = vw.gradient(psi)
+		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
+		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
+		
+		wx = uref*(dpsi_dlon**2 - psi*d2psi_dlon2) + vref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+		wy = uref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) + vref*(dpsi_dlat**2 - psi*d2psi_dlat2)
+		
+		coeff = 1./2/mag_u
+		rad2deg = 1.
+	else:
+		# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
+		dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+		dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
+		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
+		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
+	
+		wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+		    + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+		wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+		    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-	# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
-	dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-	dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-	d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
-	d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
-	d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
+		coeff = coslat/2/mag_u
 
-	wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
-		+ vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-	wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
-		+ vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
-
-	coeff = coslat/2/mag_u
-
-	rad2deg = 180/np.pi
+		rad2deg = 180/np.pi
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx*rad2deg*rad2deg
@@ -921,8 +937,14 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	wy.attrs['units'] = 'm2/s2'
 	#
 	# Now compute the divergence
-	div1 = 1/a0/coslat*wx.differentiate(lon,edge_order=2)*rad2deg
-	div2 = 1/a0/coslat*(wy*coslat).differentiate(lat,edge_order=2)
+	if has_windspharm:
+		div1,_ = vw.gradient(wx)
+		_,div2 = vw.gradient(wy*coslat)
+	else:
+		div1 = wx.differentiate(lon,edge_order=2)
+		div2 = (wy*coslat).differentiate(lat,edge_order=2)
+		div1 = 1/a0/coslat*div1*rad2deg
+		div2 = 1/a0/coslat*div2
 
 	if tref is None:
 		div = (div1+div2)*86400
@@ -946,18 +968,21 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		else:
 			S2 = tref
 
-		wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
-
+		if has_windspharm:
+			wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		else:
+			wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		
 		wz = coeff*wz*rad2deg
-
+		
 		wz.name = 'wz'
 		wz.attrs['units'] = 'hPa.m/s2'
-
+		
 		div3 = wz.differentiate(pres,edge_order=2)
 		div = (div1+div2+div3)*86400
 		div.name = 'div'
 		div.attrs['units'] = 'm/s/d'
-
+		
 		return wx,wy,wz,div
 
 ##############################################################################################
