@@ -904,10 +904,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		dpsi_dlon,dpsi_dlat = vw.gradient(psi)
 		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
 		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
-		
+
 		wx = uref*(dpsi_dlon**2 - psi*d2psi_dlon2) + vref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
 		wy = uref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) + vref*(dpsi_dlat**2 - psi*d2psi_dlat2)
-		
+
 		coeff = 1./2/mag_u
 		rad2deg = 1.
 	else:
@@ -917,16 +917,15 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
 		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
 		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
-	
+
 		wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
 		    + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
 		wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 		    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
 		coeff = coslat/2/mag_u
-
 		rad2deg = 180/np.pi
-
+	
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx*rad2deg*rad2deg
 	wy = coeff*wy*rad2deg*rad2deg
@@ -972,17 +971,17 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 			wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
 		else:
 			wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
-		
+
 		wz = coeff*wz*rad2deg
-		
+
 		wz.name = 'wz'
 		wz.attrs['units'] = 'hPa.m/s2'
-		
+
 		div3 = wz.differentiate(pres,edge_order=2)
 		div = (div1+div2+div3)*86400
 		div.name = 'div'
 		div.attrs['units'] = 'm/s/d'
-		
+
 		return wx,wy,wz,div
 
 ##############################################################################################
