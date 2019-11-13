@@ -551,14 +551,13 @@ def eof(X,n=1,detrend='constant'):
 
 
 ##############################################################################################
-def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='constant'):
+def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constant'):
 	"""Compute annular mode as in Geber et al, GRL 2008.
 		This is basically the first PC, but normalized to unit variance and zero mean.
 
 		INPUTS:
 			lat    - latitude
 			pres   - pressure
-			time   - time
 			data   - variable to compute EOF from. This is typically
 						geopotential or zonal wind.
 						Size time x pres x lat (ie zonal mean)
@@ -575,7 +574,7 @@ def ComputeAnnularMode(lat, pres, time, data, choice='z',hemi='infer',detrend='c
 			AM     - The annular mode, size time x pres
 	"""
 	#
-	AM = np.empty((len(time),len(pres)))
+	AM = np.empty((data.shape[0],data.shape[1]))
 	AM[:] = np.nan
 	# guess the hemisphere
 	if hemi == 'infer':
@@ -925,7 +924,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 
 		coeff = coslat/2/mag_u
 		rad2deg = 180/np.pi
-	
+
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx*rad2deg*rad2deg
 	wy = coeff*wy*rad2deg*rad2deg
@@ -1323,7 +1322,7 @@ def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
 			y = GetAnomaly(y,0)
 	# Fourier decompose
 	x = np.fft.fft(x,axis=0)
-	nmodes = x.shape[0]/2+1
+	nmodes = x.shape[0]//2+1
 	if wave < 0:
 			if y is not None:
 				xym = np.zeros((nmodes,)+x.shape[1:])
