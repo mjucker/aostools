@@ -835,7 +835,83 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False):
+def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=False):
+	'''
+		Compute the horizontal streamfunction from u and v. Assumes horizontal non-divergence.
+		If windspharm is to be used (and installed), this will be the most accurate. However, due to
+		some serious restrictions in terms of domain and grid spacing with spherical harmonics,
+		a direct integral method is also implemented. Note that this will give a much noisier streamfunction
+		than using windspharm.
+
+		INPUTS:
+			u              : zonal wind. xarray.DataArray
+			v              : meridional wind. xarray.DataArray
+			lat            : name of latitude in u,v
+			lon            : name of longitude on u,v
+			lat0           : reference latitude for direct integration method
+			lon0           : reference longitude for direct integration method
+			use_windspharm : whether or not to use windspharm.
+		OUTPUTS:
+			psi : streamfunction
+			wv  : windspharm.VectorWind object. Only applies if use_windspharm = True
+	'''
+	import numpy as np
+	from xarray import DataArray,concat
+	a0 = 6376000
+	if use_windspharm:
+		from windspharm.xarray import VectorWind
+		wv = VectorWind(u,v)
+		return wv.streamfunction(),wv
+	else:
+		u = u.sortby(lat)
+		v = v.sortby(lat)
+		cosphi = np.cos(np.deg2rad(u[lat]))
+		lons = u[lon].values
+		lats = u[lat].values
+		# nlats = len(lats)
+		# nlons = len(lons)
+		j0 = np.argmin(np.abs(lats-lat0))
+		i0 = np.argmin(np.abs(lons-lon0))
+		from scipy.integrate import cumtrapz
+		#
+		## first, fix phi0
+		#
+		latind = u.get_axis_num(lat)
+		# integrate from phi0 to phi_max
+		psi_1a = -cumtrapz(a0*u.isel({lat:slice(j0,None)}),x=lats[j0:],axis=latind,initial=0)
+		# integrate from phi0 to phi_min
+		integrand_b = a0*u.isel({lat:slice(None,j0)}).isel({lat:slice(None,None,-1)})
+		psi_1b = -cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+		# integrate at phi0
+		integrand = (a0*cosphi*v).isel({lat:j0})
+		lonind = integrand.get_axis_num(lon)
+		psi_2  = +cumtrapz(integrand,x=lons,axis=lonind,initial=0)
+		# put everything together
+		psi1ax = DataArray(psi_1a,coords=u.isel({lat:slice(j0,None)}).coords,name='psi')
+		psi1bx = DataArray(psi_1b,coords=integrand_b.coords,name='psi')
+		psi2x  = DataArray(psi_2 ,coords=u.isel({lat:j0}).coords,name='psi')
+		psix1 = concat([psi1ax+psi2x,psi1bx-psi2x],dim=lat).sortby(lat)
+		#
+		## then, do the same but fix lambda0
+		#
+		# integrate from lambda0 to lambda
+		integrand_1 = a0*cosphi*v
+		lonind = integrand_1.get_axis_num(lon)
+		psi_1 = cumtrapz(integrand_1,x=lons,axis=lonind,initial=0)
+		# them integrate at lambda0
+		integrand_a = (a0*u).isel({lat:slice(j0,None),lon:i0})
+		psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
+		integrand_b = (a0*u).isel({lat:slice(None,j0),lon:i0}).isel({lat:slice(None,None,-1)})
+		psi_2b = cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+		# put everything together
+		psi1x  = DataArray(psi_1,coords=integrand_1.coords,name='psi')
+		psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
+		psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi')
+		# psix2 = concat([psi1x+psi2ax,psi1x+psi2bx],dim=lat).sortby(lat)
+		psix2 = psi1x.sortby(lat) - concat([psi2ax,psi2bx],dim=lat).sortby(lat)
+		return 0.5*(psix1+psix2)/180*np.pi
+##############################################################################################
+def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False,use_windspharm=False):
 	'''
 		Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
 		Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
@@ -885,21 +961,20 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	mag_u = np.sqrt(uref**2 + vref**2)
 	f  = 2*2*np.pi/86400.*np.sin(radlat)
 
-	try:
-		from windspharm.xarray import VectorWind
-		has_windspharm = True
-	except:
-		has_windspharm = False
-
+	if use_windspharm:
+		try:
+			from windspharm.xarray import VectorWind
+		except:
+			use_windspharm = False
+			print('WARNING: YOU REQUESTED USE_WINDSPHARM=TRUE, BUT I CANNOT IMPORT WINDSPHARM. CONTINUING WIHOUT WINDSPHARM.')
 
 	if qg:
 		psi = (phi_or_u-phiref_or_v)/f
+		if use_windspharm:
+			vw = VectorWind(-psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num),psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num))
 	else:
-		if not has_windspharm:
-			raise ValueError("This needs the windspharm package. You can still use this function without it, but you need to set qg=False.")
-		vw = VectorWind(phi_or_u-uref,phiref_or_v-vref)
-		psi = vw.streamfunction()
-	if has_windspharm:
+		psi,vw = ComputeStreamfunction(phi_or_u-uref,phiref_or_v-vref,lat,lon,use_windspharm=use_windspharm)
+	if use_windspharm:
 		dpsi_dlon,dpsi_dlat = vw.gradient(psi)
 		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
 		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
@@ -935,9 +1010,15 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	wy.attrs['units'] = 'm2/s2'
 	#
 	# Now compute the divergence
-	if has_windspharm:
+	if use_windspharm:
+		# unfortunately, vw.gradient inverts the order of latitude
+		#  to get the same order, we multiply by an xr.DataArray with the same
+		#  coordinates as the input
 		div1,_ = vw.gradient(wx)
 		_,div2 = vw.gradient(wy*coslat)
+		ones = DataArray(np.ones_like(wx),coords=wx.coords)
+		div1 = ones*div1
+		div2 = ones*div2
 	else:
 		div1 = wx.differentiate(lon,edge_order=2)
 		div2 = (wy*coslat).differentiate(lat,edge_order=2)
@@ -966,7 +1047,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		else:
 			S2 = tref
 
-		if has_windspharm:
+		if use_windspharm:
 			wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
 		else:
 			wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
@@ -1572,12 +1653,14 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 			data:     xarray.DataArray with latitude swapped and
 					   longitude from 0 to 360 degrees.
 	"""
+	import xarray as xr
 	if lat_name is not None:
 		data = data.interp({lat_name:data[lat_name][::-1]},method='nearest')
 	if lon_name is not None:
 		data_low = data.sel({lon_name: slice(0,180)})
 		data_neg = data.sel({lon_name: slice(-180,-0.001)})
 		data_neg[lon_name] += 360
+		data = xr.concat([data_low,data_neg],dim=lon_name)
 	return data.sortby(lon_name)
 
 #######################################################
