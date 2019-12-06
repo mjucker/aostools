@@ -970,12 +970,17 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 
 	if qg:
 		psi = (phi_or_u-phiref_or_v)/f
+		u = -psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+		v = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+		dpsi_dlon =  v
+		dpsi_dlat = -u
 		if use_windspharm:
-			vw = VectorWind(-psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num),psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num))
+			vw = VectorWind(u,v)
 	else:
 		psi,vw = ComputeStreamfunction(phi_or_u-uref,phiref_or_v-vref,lat,lon,use_windspharm=use_windspharm)
+		dpsi_dlon = phiref_or_v - vref
+		dpsi_dlat = -(phi_or_u - uref)
 	if use_windspharm:
-		dpsi_dlon,dpsi_dlat = vw.gradient(psi)
 		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
 		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
 
@@ -986,8 +991,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		rad2deg = 1.
 	else:
 		# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
-		dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-		dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+		# dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+		# dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
 		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
 		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
 		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
@@ -1001,8 +1006,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		rad2deg = 180/np.pi
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
-	wx = coeff*wx*rad2deg*rad2deg
-	wy = coeff*wy*rad2deg*rad2deg
+	wx = coeff*wx*rad2deg
+	wy = coeff*wy*rad2deg
 
 	wx.name = 'wx'
 	wx.attrs['units'] = 'm2/s2'
