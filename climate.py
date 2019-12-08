@@ -835,7 +835,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=False):
+def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=False,vw=None):
 	'''
 		Compute the horizontal streamfunction from u and v. Assumes horizontal non-divergence.
 		If windspharm is to be used (and installed), this will be the most accurate. However, due to
@@ -851,6 +851,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 			lat0           : reference latitude for direct integration method
 			lon0           : reference longitude for direct integration method
 			use_windspharm : whether or not to use windspharm.
+			vw             : if use_windspharm = True, save time by also sending VectorWind object.
 		OUTPUTS:
 			psi : streamfunction
 			wv  : windspharm.VectorWind object. Only applies if use_windspharm = True
@@ -859,9 +860,10 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 	from xarray import DataArray,concat
 	a0 = 6376000
 	if use_windspharm:
-		from windspharm.xarray import VectorWind
-		wv = VectorWind(u,v)
-		return wv.streamfunction(),wv
+		if vw is None:
+			from windspharm.xarray import VectorWind
+			vw = VectorWind(u,v)
+		return vw.streamfunction()
 	else:
 		u = u.sortby(lat)
 		v = v.sortby(lat)
@@ -967,7 +969,6 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		except:
 			use_windspharm = False
 			print('WARNING: YOU REQUESTED USE_WINDSPHARM=TRUE, BUT I CANNOT IMPORT WINDSPHARM. CONTINUING WIHOUT WINDSPHARM.')
-
 	if qg:
 		psi = (phi_or_u-phiref_or_v)/f
 		u = -psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
@@ -977,9 +978,15 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		if use_windspharm:
 			vw = VectorWind(u,v)
 	else:
-		psi,vw = ComputeStreamfunction(phi_or_u-uref,phiref_or_v-vref,lat,lon,use_windspharm=use_windspharm)
-		dpsi_dlon = phiref_or_v - vref
-		dpsi_dlat = -(phi_or_u - uref)
+		if use_windspharm:
+			u = phi_or_u-uref
+			v = phiref_or_v-vref
+			vw = VectorWind(u,v)
+		else:
+			vw = None
+		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw)
+		dpsi_dlon =  v
+		dpsi_dlat = -u
 	if use_windspharm:
 		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
 		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
