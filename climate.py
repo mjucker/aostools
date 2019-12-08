@@ -900,8 +900,10 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 		psi_1 = cumtrapz(integrand_1,x=lons,axis=lonind,initial=0)
 		# them integrate at lambda0
 		integrand_a = (a0*u).isel({lat:slice(j0,None),lon:i0})
+		latind = integrand_a.get_axis_num(lat)
 		psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
 		integrand_b = (a0*u).isel({lat:slice(None,j0),lon:i0}).isel({lat:slice(None,None,-1)})
+		latind = integrand_b.get_axis_num(lat)
 		psi_2b = cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
 		# put everything together
 		psi1x  = DataArray(psi_1,coords=integrand_1.coords,name='psi')
