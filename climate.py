@@ -835,7 +835,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=False,vw=None):
+def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=90,lon0=0,use_windspharm=False,vw=None):
 	'''
 		Compute the horizontal streamfunction from u and v. Assumes horizontal non-divergence.
 		If windspharm is to be used (and installed), this will be the most accurate. However, due to
@@ -844,13 +844,13 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 		than using windspharm.
 
 		INPUTS:
-			u              : zonal wind. xarray.DataArray
-			v              : meridional wind. xarray.DataArray
-			lat            : name of latitude in u,v
-			lon            : name of longitude on u,v
-			lat0           : reference latitude for direct integration method
-			lon0           : reference longitude for direct integration method
-			use_windspharm : whether or not to use windspharm.
+			u              : zonal wind. xarray.DataArray.
+			v              : meridional wind. xarray.DataArray.
+			lat            : name of latitude in u,v.
+			lon            : name of longitude on u,v.
+			lat0           : reference latitude for direct integration method.
+			lon0           : reference longitude for direct integration method.
+			use_windspharm : whether or not to use windspharm. If False, use direct integration method.
 			vw             : if use_windspharm = True, save time by also sending VectorWind object.
 		OUTPUTS:
 			psi : streamfunction
@@ -870,6 +870,8 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 		cosphi = np.cos(np.deg2rad(u[lat]))
 		lons = u[lon].values
 		lats = u[lat].values
+		nlon = len(lons)
+		nlat = len(lats)
 		# nlats = len(lats)
 		# nlons = len(lons)
 		j0 = np.argmin(np.abs(lats-lat0))
@@ -880,19 +882,30 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 		#
 		latind = u.get_axis_num(lat)
 		# integrate from phi0 to phi_max
-		psi_1a = -cumtrapz(a0*u.isel({lat:slice(j0,None)}),x=lats[j0:],axis=latind,initial=0)
+		if j0 < nlat-1:
+			psi_1a = -cumtrapz(a0*u.isel({lat:slice(j0,None)}),x=lats[j0:],axis=latind,initial=0)
+			psi1ax = DataArray(psi_1a,coords=u.isel({lat:slice(j0,None)}).coords,name='psi')
+		else:
+			psi1ax = 0.
 		# integrate from phi0 to phi_min
-		integrand_b = a0*u.isel({lat:slice(None,j0)}).isel({lat:slice(None,None,-1)})
-		psi_1b = -cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+		if j0 > 0:
+			integrand_b = a0*u.isel({lat:slice(None,j0)}).isel({lat:slice(None,None,-1)})
+			psi_1b = -cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+			psi1bx = DataArray(psi_1b,coords=integrand_b.coords,name='psi')
+		else:
+			psi1bx = 0.
 		# integrate at phi0
 		integrand = (a0*cosphi*v).isel({lat:j0})
 		lonind = integrand.get_axis_num(lon)
 		psi_2  = +cumtrapz(integrand,x=lons,axis=lonind,initial=0)
 		# put everything together
-		psi1ax = DataArray(psi_1a,coords=u.isel({lat:slice(j0,None)}).coords,name='psi')
-		psi1bx = DataArray(psi_1b,coords=integrand_b.coords,name='psi')
 		psi2x  = DataArray(psi_2 ,coords=u.isel({lat:j0}).coords,name='psi')
-		psix1 = concat([psi1ax+psi2x,psi1bx-psi2x],dim=lat).sortby(lat)
+		if isinstance(psi1ax,DataArray) and isinstance(psi1bx,float):
+			psix1 = (psi1ax + psi2x).sortby(lat)
+		elif isinstance(psi1bx,DataArray) and isinstance(psi1ax,float):
+			psix1 = (psi1bx - psi2x).sortby(lat)
+		else:
+			psix1 = concat([psi1ax+psi2x,psi1bx-psi2x],dim=lat).sortby(lat)
 		#
 		## then, do the same but fix lambda0
 		#
@@ -901,16 +914,28 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=0,lon0=0,use_windspharm=F
 		lonind = integrand_1.get_axis_num(lon)
 		psi_1 = cumtrapz(integrand_1,x=lons,axis=lonind,initial=0)
 		# them integrate at lambda0
-		integrand_a = (a0*u).isel({lat:slice(j0,None),lon:i0})
-		psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
-		integrand_b = (a0*u).isel({lat:slice(None,j0),lon:i0}).isel({lat:slice(None,None,-1)})
-		psi_2b = cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+		if j0 < nlat-1:
+			integrand_a = (a0*u).isel({lat:slice(j0,None),lon:i0})
+			psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
+			psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
+		else:
+			psi2ax = 0.
+		if j0 > 0:
+			integrand_b = (a0*u).isel({lat:slice(None,j0),lon:i0}).isel({lat:slice(None,None,-1)})
+			psi_2b = cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
+			psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi')
+		else:
+			psi2bx = 0.
 		# put everything together
-		psi1x  = DataArray(psi_1,coords=integrand_1.coords,name='psi')
-		psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
-		psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi')
+		psi1x  = DataArray(psi_1,coords=integrand_1.coords,name='psi').sortby(lat)
 		# psix2 = concat([psi1x+psi2ax,psi1x+psi2bx],dim=lat).sortby(lat)
-		psix2 = psi1x.sortby(lat) - concat([psi2ax,psi2bx],dim=lat).sortby(lat)
+		psix2 = psi1x.sortby(lat)
+		if isinstance(psi2ax,DataArray) and isinstance(psi2bx,DataArray):
+			psix2 = psix2 - concat([psi2ax,psi2bx],dim=lat).sortby(lat)
+		elif isinstance(psi2ax,DataArray):
+			psix2 = psix2 - psi2ax.sortby(lat)
+		elif isinstance(psi2bx,DataArray):
+			psix2 = psix2 - psi2bx.sortby(lat)
 		return 0.5*(psix1+psix2)/180*np.pi
 ##############################################################################################
 def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False,use_windspharm=False):
@@ -978,9 +1003,9 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		if use_windspharm:
 			vw = VectorWind(u,v)
 	else:
+		u = phi_or_u-uref
+		v = phiref_or_v-vref
 		if use_windspharm:
-			u = phi_or_u-uref
-			v = phiref_or_v-vref
 			vw = VectorWind(u,v)
 		else:
 			vw = None
