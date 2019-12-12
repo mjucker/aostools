@@ -1003,8 +1003,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		if use_windspharm:
 			vw = VectorWind(u,v)
 	else:
-		u = phi_or_u-uref
-		v = phiref_or_v-vref
+		u = phi_or_u - uref
+		v = phiref_or_v - vref
 		if use_windspharm:
 			vw = VectorWind(u,v)
 		else:
