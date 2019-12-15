@@ -835,7 +835,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=90,lon0=0,use_windspharm=False,vw=None):
+def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lon0=0,method='uv',smooth=None,vw=None):
 	'''
 		Compute the horizontal streamfunction from u and v. Assumes horizontal non-divergence.
 		If windspharm is to be used (and installed), this will be the most accurate. However, due to
@@ -848,9 +848,12 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=90,lon0=0,use_windspharm=
 			v              : meridional wind. xarray.DataArray.
 			lat            : name of latitude in u,v.
 			lon            : name of longitude on u,v.
+			use_windspharm : whether or not to use windspharm. If False, use direct integration method.
 			lat0           : reference latitude for direct integration method.
 			lon0           : reference longitude for direct integration method.
-			use_windspharm : whether or not to use windspharm. If False, use direct integration method.
+			method         : integrate over u ('u') or v ('v') or both ('uv'). Only for direct integration method.
+			smooth         : smooth streamfunction after integration via rolling mean. If not None, should be a dictionary
+			                  containing the roll window for each dimension, e.g. {'lon':5,'lat':3}.
 			vw             : if use_windspharm = True, save time by also sending VectorWind object.
 		OUTPUTS:
 			psi : streamfunction
@@ -880,65 +883,114 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',lat0=90,lon0=0,use_windspharm=
 		#
 		## first, fix phi0
 		#
-		latind = u.get_axis_num(lat)
-		# integrate from phi0 to phi_max
-		if j0 < nlat-1:
-			psi_1a = -cumtrapz(a0*u.isel({lat:slice(j0,None)}),x=lats[j0:],axis=latind,initial=0)
-			psi1ax = DataArray(psi_1a,coords=u.isel({lat:slice(j0,None)}).coords,name='psi')
-		else:
-			psi1ax = 0.
-		# integrate from phi0 to phi_min
-		if j0 > 0:
-			integrand_b = a0*u.isel({lat:slice(None,j0)}).isel({lat:slice(None,None,-1)})
-			psi_1b = -cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
-			psi1bx = DataArray(psi_1b,coords=integrand_b.coords,name='psi')
-		else:
-			psi1bx = 0.
-		# integrate at phi0
-		integrand = (a0*cosphi*v).isel({lat:j0})
-		lonind = integrand.get_axis_num(lon)
-		psi_2  = +cumtrapz(integrand,x=lons,axis=lonind,initial=0)
-		# put everything together
-		psi2x  = DataArray(psi_2 ,coords=u.isel({lat:j0}).coords,name='psi')
-		if isinstance(psi1ax,DataArray) and isinstance(psi1bx,float):
-			psix1 = (psi1ax + psi2x).sortby(lat)
-		elif isinstance(psi1bx,DataArray) and isinstance(psi1ax,float):
-			psix1 = (psi1bx - psi2x).sortby(lat)
-		else:
-			psix1 = concat([psi1ax+psi2x,psi1bx-psi2x],dim=lat).sortby(lat)
+		if 'u' in method:
+			latind = u.get_axis_num(lat)
+			# integrate from phi0 to phi_max
+			integrand = a0*u
+			if j0 < nlat-1:
+				integrand_a = integrand.isel({lat:slice(j0,None)})
+				psi_1a = -cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
+				psi1ax = DataArray(psi_1a,coords=integrand_a.coords,name='psi')
+			else:
+				psi1ax = 0*integrand
+			# integrate from phi0 to phi_min
+			if j0 > 0:
+				j1 = j0+1
+				integrand_b = integrand.isel({lat:slice(None,j1)}).isel({lat:slice(None,None,-1)})
+				psi_1b = -cumtrapz(integrand_b,x=lats[:j1][::-1],axis=latind,initial=0)
+				psi1bx = DataArray(psi_1b,coords=integrand_b.coords,name='psi').isel({lat:slice(1,None)})
+			else:
+				psi1bx = 0*integrand
+			# case 1: either psi1ax = 0 or psi1bx = 0
+			if psi1ax.shape == integrand.shape and psi1bx.shape == integrand.shape:
+				psi1x = psi1ax + psi1bx
+			# case 2: integrated on either side of j0
+			else:
+				psi1x = concat([psi1ax,psi1bx],dim=lat).sortby(lat)
+
+			# integrate at phi0
+			integrand = (a0*cosphi*v).isel({lat:j0})
+			lonind = integrand.get_axis_num(lon)
+			if i0 < nlon-1:
+				integrand_a = integrand.isel({lon:slice(i0,None)})
+				psi_2a = cumtrapz(integrand_a,x=lons[i0:],axis=lonind,initial=0)
+				psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
+			else:
+				psi2ax = 0*integrand
+			if i0 > 0:
+				i1 = i0+1
+				integrand_b = integrand.isel({lon:slice(None,i1)}).isel({lon:slice(None,None,-1)})
+				psi_2b = cumtrapz(integrand_b,x=lons[:i1][::-1],axis=lonind,initial=0)
+				psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi').isel({lon:slice(1,None)})
+			else:
+				psi2bx = 0*integrand
+			# case 1: either psi2ax = 0 or psi2bx = 0
+			if psi2ax.shape == integrand.shape or psi2bx.shape == integrand.shape:
+				psi2x = psi2ax + psi2bx
+			# case 2: integrated on either side of i0
+			else:
+				psi2x = concat([psi2ax,psi2bx],dim=lon).sortby(lon)
+			# put everything together
+			psix1 = psi2x + psi1x
+			if method == 'u':
+				psi_out = psix1*np.pi/180
 		#
 		## then, do the same but fix lambda0
 		#
 		# integrate from lambda0 to lambda
-		integrand_1 = a0*cosphi*v
-		lonind = integrand_1.get_axis_num(lon)
-		psi_1 = cumtrapz(integrand_1,x=lons,axis=lonind,initial=0)
-		# them integrate at lambda0
-		if j0 < nlat-1:
-			integrand_a = (a0*u).isel({lat:slice(j0,None),lon:i0})
-			psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
-			psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
-		else:
-			psi2ax = 0.
-		if j0 > 0:
-			integrand_b = (a0*u).isel({lat:slice(None,j0),lon:i0}).isel({lat:slice(None,None,-1)})
-			psi_2b = cumtrapz(integrand_b,x=lats[:j0][::-1],axis=latind,initial=0)
-			psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi')
-		else:
-			psi2bx = 0.
-		# put everything together
-		psi1x  = DataArray(psi_1,coords=integrand_1.coords,name='psi').sortby(lat)
-		# psix2 = concat([psi1x+psi2ax,psi1x+psi2bx],dim=lat).sortby(lat)
-		psix2 = psi1x.sortby(lat)
-		if isinstance(psi2ax,DataArray) and isinstance(psi2bx,DataArray):
-			psix2 = psix2 - concat([psi2ax,psi2bx],dim=lat).sortby(lat)
-		elif isinstance(psi2ax,DataArray):
-			psix2 = psix2 - psi2ax.sortby(lat)
-		elif isinstance(psi2bx,DataArray):
-			psix2 = psix2 - psi2bx.sortby(lat)
-		return 0.5*(psix1+psix2)/180*np.pi
+		if 'v' in method:
+			integrand = a0*cosphi*v
+			lonind = integrand.get_axis_num(lon)
+			if i0 < nlon-1:
+				integrand_a = integrand.isel({lon:slice(i0,None)})
+				psi_1a = cumtrapz(integrand_a,x=lons[i0:],axis=lonind,initial=0)
+				psi1ax  = DataArray(psi_1a,integrand_a.coords,name='psi')
+			else:
+				psi1ax = 0*integrand
+			if i0 > 0:
+				i1 = i0+1
+				integrand_b = integrand.isel({lon:slice(None,i1)}).isel({lon:slice(None,None,-1)})
+				psi_1b = cumtrapz(integrand_b,x=lons[:i1][::-1],axis=lonind,initial=0)
+				psi1bx = DataArray(psi_1b,integrand_b.coords,name='psi').isel({lon:slice(1,None)})
+			else:
+				psi1bx = 0*integrand
+			if psi1ax.shape == integrand.shape or psi1bx.shape == integrand.shape:
+				psi1x = psi1ax + psi1bx
+			else:
+				psi1x = concat([psi1ax,psi1bx],dim=lon).sortby(lon)
+			# them integrate at lambda0
+			integrand = a0*u
+			latind = integrand.get_axis_num(lat)
+			if j0 < nlat-1:
+				integrand_a = integrand.isel({lat:slice(j0,None),lon:i0})
+				psi_2a = cumtrapz(integrand_a,x=lats[j0:],axis=latind,initial=0)
+				psi2ax = DataArray(psi_2a,coords=integrand_a.coords,name='psi')
+			else:
+				psi2ax = 0*integrand
+			if j0 > 0:
+				j1 = j0+1
+				integrand_b = integrand.isel({lat:slice(None,j1),lon:i0}).isel({lat:slice(None,None,-1)})
+				psi_2b = cumtrapz(integrand_b,x=lats[:j1][::-1],axis=latind,initial=0)
+				psi2bx = DataArray(psi_2b,coords=integrand_b.coords,name='psi').isel({lat:slice(1,None)})
+			else:
+				psi2bx = 0*integrand
+			if psi2ax.shape == integrand.shape or psi2bx.shape == integrand.shape:
+				psi2x = psi2ax + psi2bx
+			else:
+				psi2x = concat([psi2ax,psi2bx],dim=lat).sortby(lat)
+			psix2 = psi1x - psi2x
+			if method == 'v':
+				psi_out = psix2*np.pi/180
+			else:
+				psi_out = 0.5*(psix1+psix2)*np.pi/180
+		# now smooth if required
+		if smooth is not None:
+			for rdim in smooth.keys():
+				psi_out = psi_out.rolling({rdim:smooth[rdim]},center=True,min_periods=1).mean()
+		return psi_out
+
 ##############################################################################################
-def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False,use_windspharm=False):
+def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False,use_windspharm=False,kwpsi={}):
 	'''
 		Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
 		Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
@@ -987,6 +1039,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	one_over_a2 = a0**(-2)
 	mag_u = np.sqrt(uref**2 + vref**2)
 	f  = 2*2*np.pi/86400.*np.sin(radlat)
+	# wave activity flux only valid for westerlies.
+	#  it is common practice to also mask weak westerlies,
+	#  with a value of 1m/s often seen
+	mask = uref > 1.0
 
 	if use_windspharm:
 		try:
@@ -1009,7 +1065,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 			vw = VectorWind(u,v)
 		else:
 			vw = None
-		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw)
+		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw,**kwpsi)
 		dpsi_dlon =  v
 		dpsi_dlat = -u
 	if use_windspharm:
@@ -1051,6 +1107,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		# unfortunately, vw.gradient inverts the order of latitude
 		#  to get the same order, we multiply by an xr.DataArray with the same
 		#  coordinates as the input
+		wx = wx.reduce(np.nan_to_num)
+		wy = wy.reduce(np.nan_to_num)
 		div1,_ = vw.gradient(wx)
 		_,div2 = vw.gradient(wy*coslat)
 		ones = DataArray(np.ones_like(wx),coords=wx.coords)
@@ -1066,7 +1124,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		div = (div1+div2)*86400
 		div.name = 'div'
 		div.attrs['units'] = 'm/s/d'
-		return wx,wy,div
+		return wx.where(mask),wy.where(mask),div.where(mask)
 	else:
 		# psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
 		dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num)
@@ -1099,7 +1157,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		div.name = 'div'
 		div.attrs['units'] = 'm/s/d'
 
-		return wx,wy,wz,div
+		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask)
 
 ##############################################################################################
 def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
