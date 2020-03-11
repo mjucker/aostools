@@ -1750,13 +1750,16 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	"""
 	import xarray as xr
 	if lat_name is not None:
-		data = data.interp({lat_name:data[lat_name][::-1]},method='nearest')
-	if lon_name is not None:
+		if data[lat_name][0] > data[lat_name][-1]:
+			data = data.interp({lat_name:data[lat_name][::-1]},method='nearest')
+	if lon_name is not None and data[lon_name].min() < 0:
 		data_low = data.sel({lon_name: slice(0,180)})
 		data_neg = data.sel({lon_name: slice(-180,-0.001)})
 		data_neg[lon_name] += 360
 		data = xr.concat([data_low,data_neg],dim=lon_name)
-	return data.sortby(lon_name)
+		return data.sortby(lon_name)
+	else:
+		return data
 
 #######################################################
 def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
@@ -1775,6 +1778,36 @@ def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5
 	u = -grav*Z.differentiate(lat_name)/f/a0
 	v =  grav*Z.differentiate(lon_name)/f/a0/cosPhi
 	return u,v
+
+#######################################################
+def ComputeRossbyWaveSource(u,v):
+	"""
+		Compute the Rossby Wave Source.
+		This is directly from the windspharm documentation,
+		https://ajdawson.github.io/windspharm/latest/examples/rws_xarray.html
+
+		INPUTS:
+			u : zonal wind
+			v : meridional wind
+
+		OUTPUTS:
+			S : Rossby Wave Source
+	"""
+	from windspharm.xarray import VectorWind
+	# Create a VectorWind instance to handle the computations.
+	w = VectorWind(u, v)
+
+	# Compute components of rossby wave source: absolute vorticity, divergence,
+	# irrotational (divergent) wind components, gradients of absolute vorticity.
+	eta = w.absolutevorticity()
+	div = w.divergence()
+	uchi, vchi = w.irrotationalcomponent()
+	etax, etay = w.gradient(eta)
+	etax.attrs['units'] = 'm**-1 s**-1'
+	etay.attrs['units'] = 'm**-1 s**-1'
+
+	# Combine the components to form the Rossby wave source term.
+	return eta * -1. * div - (uchi * etax + vchi * etay)
 
 #######################################################
 def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_args=None):
@@ -1866,3 +1899,59 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 	b = b.rename({pres:'z'})
 	c = c.rename({pres:'z'})
 	return a,b,c
+
+
+#######################################################
+def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
+	"""
+		Produce ENSO index timeseries from SST according to Technical Notes
+		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
+
+		INPUTS:
+			sst:  xarray.DataArray which will be averaged over Nino domains
+			lon:  name of longitude dimension. Has to be in [0,360].
+			lat:  name of latitude dimension. Has to be increasing.
+			time: name of time dimension.
+			avg:  size of rolling window for rolling time average.
+			nino: which Nino index to compute. Choices are
+					'1+2','3','4','3.4','oni','tni'
+
+		OUTPUTS:
+			sst: spatially averaged over respective Nino index domain
+				  note that no running means are performed.
+	"""
+	ninos = {
+		'1+2' : {lon:slice(270,280),lat:slice(-10,0)},
+		'3'   : {lon:slice(210,270),lat:slice(-5,5)},
+		'4'   : {lon:slice(160,210),lat:slice(-5,5)},
+		'3.4' : {lon:slice(190,240),lat:slice(-5,5)},
+		'oni' : {lon:slice(190,240),lat:slice(-5,5)},
+	}
+	possible_ninos = list(ninos.keys())+['tni']
+	if nino not in possible_ninos:
+		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(nino,', '.join(possible_ninos)))
+	lon_name = None
+	lat_name = None
+	if sst[lon].min() < 0 or sst[lon].max() <= 180:
+		lon_name = lon
+	if sst[lat][0] > sst[lat][-1]:
+		lat_name = lat
+	if lon_name is not None or lat_name is not None:
+		print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
+		sst = ERA2Model(sst,lon_name,lat_name)
+
+	def NinoAvg(sst,nino,time,avg):
+		ssta = sst.sel(ninos[nino]).mean(dim=[lon,lat])
+		sstc = ssta.groupby('.'.join([time,'month'])).mean(dim=time)
+		ssta = ssta.groupby('.'.join([time,'month'])) - sstc
+		if avg is not None:
+			ssta = ssta.rolling({time:avg}).mean()
+		return ssta/ssta.std(dim=time)
+
+	if nino == 'tni':
+		n12 = NinoAvg(sst,'1+2',time,None)
+		n4  = NinoAvg(sst,'4',time,None)
+		tni = (n12-n4).rolling({time:avg}).mean()
+		return tni/tni.std(dim=time)
+	else:
+		return NinoAvg(sst,nino,time,avg)
