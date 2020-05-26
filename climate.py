@@ -494,7 +494,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	return v_bar,t_bar
 
 ##############################################################################################
-def eof(X,n=1,detrend='constant'):
+def eof(X,n=-1,detrend='constant',eof=None):
 	"""Principal Component Analysis / Empirical Orthogonal Functions / SVD
 
 		Uses Singular Value Decomposition to find the dominant modes of variability.
@@ -505,9 +505,10 @@ def eof(X,n=1,detrend='constant'):
 			n       -- Number of modes to extract. All modes if n < 0
 			detrend -- detrend with global mean ('constant')
 						  or linear trend ('linear')
+		    eof     -- If not None, compute PC by projecting eof onto X.
 		OUTPUTS:
 			EOF - Spatial modes of variability
-			PC  - Temporal evolution of EOFs
+			PC  - Temporal evolution of EOFs - only output if eof is not None
 			E   - Explained value of variability
 			u   - spatial modes
 			s   - variances
@@ -518,8 +519,16 @@ def eof(X,n=1,detrend='constant'):
 	shpe = X.shape
 	if len(shpe) > 2:
 		X = X.reshape([shpe[0],np.prod(shpe[1:])])
+		if eof is not None:
+			eof = eof.reshape([np.prod(eof.shape[:-1]),eof.shape[-1]])
 	# take out the time mean or trend
-	X = sg.detrend(X.T,type=detrend)
+	X = sg.detrend(X.transpose(),type=detrend)
+	if eof is not None:
+		try:
+			PC =  np.matmul(eof, X)
+		except:
+			PC = np.matmil(eof.transpose(), X)
+		return sg.detrend(PC,type='constant')
 	# perform SVD - v is actually V.H in X = U*S*V.H
 	u,s,v = np.linalg.svd(X, full_matrices=False)
 	# now, u contains the spatial, and v the temporal structures
@@ -541,7 +550,7 @@ def eof(X,n=1,detrend='constant'):
 	# now we need to make sure we get everything into the correct shape again
 	u = u[:,:n]
 	s = np.sqrt(s[:n])
-	v = v.T[:,:n]
+	v = v.transpose()[:,:n]
 	if len(shpe) > 2:
 		# replace time dimension with modes at the end of the array
 		newshape = list(shpe[1:])+[n]
@@ -551,9 +560,11 @@ def eof(X,n=1,detrend='constant'):
 
 
 ##############################################################################################
-def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constant'):
-	"""Compute annular mode as in Geber et al, GRL 2008.
+def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constant',eof_in=None):
+	"""Compute annular mode as in Gerber et al, GRL 2008.
 		This is basically the first PC, but normalized to unit variance and zero mean.
+		To conform to Gerber et al (2008), `data` should be anomalous height or zonal wind
+		 with respect to 30-day smoothed day of year climatology.
 
 		INPUTS:
 			lat    - latitude
@@ -570,6 +581,9 @@ def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constan
 			detrend- detrend method for computing EOFs:
 						'linear' -> remove linear trend
 						'constant' -> remove total time mean
+			eof_in - if None, compute EOF1 as usual.
+					 if the EOF(s) are already known, use this instead of
+			            computing it again.
 		OUTPUT:
 			AM     - The annular mode, size time x pres
 	"""
@@ -606,6 +620,9 @@ def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constan
 	# second possibility
 	#jj = abs(lat[j_tmp]-80).argmin()
 	#sig = -1
+	if isinstance(pres,(int,float)):
+		data = np.reshape(data,(data.shape[0],1,data.shape[1]))
+		pres = [pres]
 	for k in range(len(pres)):
 		# remove global mean
 		globZ = GlobalAvg(lat,data[:,k,:],axis=-1,lim=lat[j_tmp[0]],mx=lat[j_tmp[-1]])
@@ -614,7 +631,11 @@ def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constan
 		var = var[:,j_tmp]*sqrtcoslat[np.newaxis,:]
 		varNan = np.isnan(var)
 		if np.sum(np.reshape(varNan,(np.size(varNan),)))==0:
-			eof1,pc1,E,u,s,v = eof(var,detrend=detrend)
+			if eof_in is None:
+				eof1,pc1,E,u,s,v = eof(var,n=1,detrend=detrend)
+			else:
+				pc1 = eof(var,n=1,detrend=detrend,eof=eof_in[k,:])
+				eof1 = eof_in[k,:]
 			# force the sign of PC
 			pc1  = pc1*sig*np.sign(eof1[jj].mean())
 			# force unit variance and zero mean
@@ -1955,3 +1976,25 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 		return tni/tni.std(dim=time)
 	else:
 		return NinoAvg(sst,nino,time,avg)
+
+
+#######################################################
+def RollingMeanStd(x,mean_std,r=31,dim='time'):
+    '''Compute climatological standard deviation or mean, smoothed by a rolling mean on day of year.
+
+    INPUTS;
+        x       : DataArray on which to operate on.
+        mean_std: either 'mean' or 'std' depending on what you want to do.
+    '''
+    import xarray as xr
+    import numpy as np
+    if mean_std == 'mean':
+        xc = x.groupby(dim+'.dayofyear').mean()
+    elif mean_std == 'std':
+        xc = x.groupby(dim+'.dayofyear').std()
+    else:
+        raise ValueError("mean_std has to be 'mean' or 'std' but is "+mean_std)
+    x1 = xc.roll(dayofyear=2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=-2*r,roll_coords=True)
+    x2 = xc.roll(dayofyear=-2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=2*r,roll_coords=True)
+    xc = xr.where(np.isnan(x1),x2,x1)
+    return xc
