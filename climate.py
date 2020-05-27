@@ -637,7 +637,7 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 			if eof_in is None:
 				eof1,pc1,E,u,s,v = eof(var,n=1,detrend=detrend)
 			else:
-				pc1 = eof(var,n=1,detrend=detrend,eof=eof_in[k,:])
+				pc1 = eof(var,n=1,detrend=detrend,eof_in=eof_in[k,:])
 				eof1 = eof_in[k,:]
 			# force the sign of PC
 			pc1  = pc1*sig*np.sign(eof1[jj].mean())
