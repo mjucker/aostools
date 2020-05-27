@@ -494,7 +494,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	return v_bar,t_bar
 
 ##############################################################################################
-def eof(X,n=-1,detrend='constant',eof=None):
+def eof(X,n=-1,detrend='constant',eof_in=None):
 	"""Principal Component Analysis / Empirical Orthogonal Functions / SVD
 
 		Uses Singular Value Decomposition to find the dominant modes of variability.
@@ -505,10 +505,10 @@ def eof(X,n=-1,detrend='constant',eof=None):
 			n       -- Number of modes to extract. All modes if n < 0
 			detrend -- detrend with global mean ('constant')
 						  or linear trend ('linear')
-		    eof     -- If not None, compute PC by projecting eof onto X.
+		    eof_in  -- If not None, compute PC by projecting eof onto X.
 		OUTPUTS:
 			EOF - Spatial modes of variability
-			PC  - Temporal evolution of EOFs - only output if eof is not None
+			PC  - Temporal evolution of EOFs - only output if eof_in is not None
 			E   - Explained value of variability
 			u   - spatial modes
 			s   - variances
@@ -523,12 +523,13 @@ def eof(X,n=-1,detrend='constant',eof=None):
 			eof = eof.reshape([np.prod(eof.shape[:-1]),eof.shape[-1]])
 	# take out the time mean or trend
 	X = sg.detrend(X.transpose(),type=detrend)
-	if eof is not None:
-		try:
-			PC =  np.matmul(eof, X)
-		except:
-			PC = np.matmil(eof.transpose(), X)
-		return sg.detrend(PC,type='constant')
+	if eof_in is not None:
+		if eof_in.shape[-1] == X.shape[0]:
+			PC =  np.matmul(eof_in, X)
+		else:
+			PC = np.matmul(eof_in.transpose(), X)
+		# return sg.detrend(PC,type='constant')
+		return PC/np.dot(eof_in.transpose(),eof_in)
 	# perform SVD - v is actually V.H in X = U*S*V.H
 	u,s,v = np.linalg.svd(X, full_matrices=False)
 	# now, u contains the spatial, and v the temporal structures
@@ -545,11 +546,11 @@ def eof(X,n=-1,detrend='constant',eof=None):
 	PC  = v[:n,:]
 	# EOF wants \lambda = the squares of the eigenvalues,
 	#  but SVD yields \gamma = \sqrt{\lambda}
-	s = s*s
-	E   = s[:n]/sum(s)
+	s2 = s*s
+	E   = s2[:n]/sum(s2)
 	# now we need to make sure we get everything into the correct shape again
 	u = u[:,:n]
-	s = np.sqrt(s[:n])
+	s = s[:n]
 	v = v.transpose()[:,:n]
 	if len(shpe) > 2:
 		# replace time dimension with modes at the end of the array
@@ -560,7 +561,7 @@ def eof(X,n=-1,detrend='constant',eof=None):
 
 
 ##############################################################################################
-def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constant',eof_in=None):
+def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='constant', eof_in=None, pc_in=None):
 	"""Compute annular mode as in Gerber et al, GRL 2008.
 		This is basically the first PC, but normalized to unit variance and zero mean.
 		To conform to Gerber et al (2008), `data` should be anomalous height or zonal wind
@@ -582,8 +583,10 @@ def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constan
 						'linear' -> remove linear trend
 						'constant' -> remove total time mean
 			eof_in - if None, compute EOF1 as usual.
-					 if the EOF(s) are already known, use this instead of
+					 if the EOF1 is already known, use this instead of
 			            computing it again.
+			pc_in  - if None, standardize PC1 to its own mean and std deviation
+			         else, use pc_in mean and std deviation to standardize.
 		OUTPUT:
 			AM     - The annular mode, size time x pres
 	"""
@@ -639,7 +642,10 @@ def ComputeAnnularMode(lat, pres, data, choice='z',hemi='infer',detrend='constan
 			# force the sign of PC
 			pc1  = pc1*sig*np.sign(eof1[jj].mean())
 			# force unit variance and zero mean
-			AM[:,k] = (pc1-pc1.mean())/np.std(pc1)
+			if pc_in is None:
+				AM[:,k] = (pc1-pc1.mean())/np.std(pc1)
+			else:
+				AM[:,k] = (pc1-pc_in.mean())/np.std(pc_in)
 	return AM
 
 ##############################################################################################
