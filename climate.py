@@ -519,17 +519,20 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 	shpe = X.shape
 	if len(shpe) > 2:
 		X = X.reshape([shpe[0],np.prod(shpe[1:])])
-		if eof is not None:
-			eof = eof.reshape([np.prod(eof.shape[:-1]),eof.shape[-1]])
+		if eof_in is not None:
+			eof_in = eof_in.reshape([np.prod(eof_in.shape[:-1]),eof_in.shape[-1]])
 	# take out the time mean or trend
 	X = sg.detrend(X.transpose(),type=detrend)
 	if eof_in is not None:
 		if eof_in.shape[-1] == X.shape[0]:
 			PC =  np.matmul(eof_in, X)
+			eof_norm = np.dot(eof_in.transpose(),eof_in)
+			return np.dot(PC,np.linalg.inv(eof_norm))
 		else:
 			PC = np.matmul(eof_in.transpose(), X)
+			eof_norm = np.dot(eof_in.transpose(),eof_in)
+			return np.dot(PC.transpose(),np.linalg.inv(eof_norm)).transpose()
 		# return sg.detrend(PC,type='constant')
-		return PC/np.dot(eof_in.transpose(),eof_in)
 	# perform SVD - v is actually V.H in X = U*S*V.H
 	u,s,v = np.linalg.svd(X, full_matrices=False)
 	# now, u contains the spatial, and v the temporal structures
@@ -561,7 +564,7 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 
 
 ##############################################################################################
-def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='constant', eof_in=None, pc_in=None):
+def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='constant', eof_in=None, pc_in=None, eof_out=False, pc_out=False):
 	"""Compute annular mode as in Gerber et al, GRL 2008.
 		This is basically the first PC, but normalized to unit variance and zero mean.
 		To conform to Gerber et al (2008), `data` should be anomalous height or zonal wind
@@ -587,12 +590,17 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 			            computing it again.
 			pc_in  - if None, standardize PC1 to its own mean and std deviation
 			         else, use pc_in mean and std deviation to standardize.
+			eof_out- whether or not to pass the first EOF as output [False].
+			pc_out - whether or not to pass the first PC as output [False].
 		OUTPUT:
 			AM     - The annular mode, size time x pres
+			EOF    - The first EOF (if eof_out is True), size pres x lat
+			PC     - The first PC (if pc_out is True). size time x pres
 	"""
 	#
-	AM = np.empty((data.shape[0],data.shape[1]))
-	AM[:] = np.nan
+	AM = np.full((data.shape[0],data.shape[1]),np.nan)
+	if pc_out:
+		pco = np.full(AM.shape,np.nan)
 	# guess the hemisphere
 	if hemi == 'infer':
 		if np.mean(lat) >= 0:
@@ -604,6 +612,8 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 	elif hemi == 'NH':
 		sgn = 1.
 	j_tmp = np.where(sgn*lat > 20)[0]
+	if eof_out:
+		eofo = np.full((data.shape[1],len(j_tmp)),np.nan)
 	coslat = np.cos(np.deg2rad(lat))
 	negCos = (coslat < 0.)
 	coslat[negCos] = 0.
@@ -641,12 +651,23 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 				eof1 = eof_in[k,:]
 			# force the sign of PC
 			pc1  = pc1*sig*np.sign(eof1[jj].mean())
+			if eof_out:
+				eofo[k,:] = np.squeeze(eof1)
+			if pc_out:
+				pco[:,k] = pc1
 			# force unit variance and zero mean
 			if pc_in is None:
 				AM[:,k] = (pc1-pc1.mean())/np.std(pc1)
 			else:
 				AM[:,k] = (pc1-pc_in.mean())/np.std(pc_in)
-	return AM
+	if eof_out and pc_out:
+		return AM,eofo,pco
+	elif eof_out:
+		return AM,eofo
+	elif pc_out:
+		return AM,pco
+	else:
+		return AM
 
 ##############################################################################################
 def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e3):
@@ -1050,22 +1071,21 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		'''
 	import numpy as np
 	from xarray import DataArray
+	from .constants import a0,Rd,kappa,Omega
 	for var in [phi_or_u,uref,vref,phiref_or_v,tref]:
 		if not isinstance(var,DataArray):
 			if var is None or np.isscalar(var):
 				pass
 			else:
 				raise ValueError('all inputs have to be xarray.DataArrays!')
-	a0 = 6376000.0
-	Rd = 287.04
-	kappa = 2./7
 	p0 = 1.e3
 	radlat = np.deg2rad(phi_or_u[lat])
 	coslat = np.cos(radlat)
 	one_over_coslat2 = coslat**(-2)
 	one_over_a2 = a0**(-2)
+	one_over_acoslat = (a0*coslat)**(-1)
 	mag_u = np.sqrt(uref**2 + vref**2)
-	f  = 2*2*np.pi/86400.*np.sin(radlat)
+	f  = 2*Omega*np.sin(radlat)
 	# wave activity flux only valid for westerlies.
 	#  it is common practice to also mask weak westerlies,
 	#  with a value of 1m/s often seen
@@ -1102,27 +1122,32 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		wx = uref*(dpsi_dlon**2 - psi*d2psi_dlon2) + vref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
 		wy = uref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) + vref*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-		coeff = 1./2/mag_u
-		rad2deg = 1.
+		coeff = coslat/2/mag_u
 	else:
 		# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
 		# dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
 		# dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2)
-		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2)
-		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2)
+		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2) # [dpsi_dlon/lon] = [m/s/deg_lon]
+		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m/s/deg_lat]
+		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m/s/deg_lat]
 
-		wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
-		    + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-		wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
-		    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
+		# wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+		#     + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+		# wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+		#     + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-		coeff = coslat/2/mag_u
 		rad2deg = 180/np.pi
 
+		wx =  uref*(dpsi_dlon**2        - one_over_acoslat*psi*d2psi_dlon2*rad2deg) \
+		    + vref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg)
+		wy =  uref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg) \
+		    + vref*(dpsi_dlat**2        - one_over_acoslat*psi*d2psi_dlat2*rad2deg)
+
+		coeff = coslat/2/mag_u
+
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
-	wx = coeff*wx*rad2deg
-	wy = coeff*wy*rad2deg
+	wx = coeff*wx
+	wy = coeff*wy
 
 	wx.name = 'wx'
 	wx.attrs['units'] = 'm2/s2'
@@ -1144,8 +1169,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	else:
 		div1 = wx.differentiate(lon,edge_order=2)
 		div2 = (wy*coslat).differentiate(lat,edge_order=2)
-		div1 = 1/a0/coslat*div1*rad2deg
-		div2 = 1/a0/coslat*div2
+		div1 = one_over_acoslat*div1*rad2deg
+		div2 = div2*rad2deg/a0
 
 	if tref is None:
 		div = (div1+div2)*86400
@@ -1154,9 +1179,9 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		return wx.where(mask),wy.where(mask),div.where(mask)
 	else:
 		# psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
-		dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num)
-		d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2)
-		d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2)
+		dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num) # [m2/s/hPa]
+		d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2) # [m/s/hPa]
+		d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2) # [m/s/hPa]
 		# S2 = -\alpha*\partial_p\ln\theta, \alpha = 1/\rho = Rd*T/p
 		#    = R/p*(p/p0)**\kappa d\theta/dp, Vallis (2017, p. 192 (eq. 5.127))
 		#  this should be a reference profile and a function of pressure only!
@@ -1164,20 +1189,20 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		if isinstance(tref,DataArray):
 			pp0 = (p0/pressure)**kappa
 			theta = pp0*tref
-			S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2)
+			S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2) # [m2/hPa2/s2]
 			# S2 = S2.where(S2>1e-7,1e-7) # avoid division by zero
 		else:
 			S2 = tref
 
-		if use_windspharm:
-			wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
-		else:
-			wz = f**2/S2*( uref/a0/coslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		# units: using [S2] = m3/kg/hPa, we get [wz] = kg/s4 = hPa.m/s2. Note that using [S2] = m2/s2/hPa2 will lead to m5/s2/hPa3,
+		#  which is correct but much less informative.
 
-		wz = coeff*wz*rad2deg
+		wz = coeff*wz
 
 		wz.name = 'wz'
 		wz.attrs['units'] = 'hPa.m/s2'
+		wz.attrs['alternative_units'] = 'kg/s4'
 
 		div3 = wz.differentiate(pres,edge_order=2)
 		div = (div1+div2+div3)*86400
@@ -1782,7 +1807,7 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	if lon_name is not None and data[lon_name].min() < 0:
 		data_low = data.sel({lon_name: slice(0,180)})
 		data_neg = data.sel({lon_name: slice(-180,-0.001)})
-		data_neg[lon_name] += 360
+		data_neg.assign_coords({lon_name: data_neg[lon_name]+360})
 		data = xr.concat([data_low,data_neg],dim=lon_name)
 		return data.sortby(lon_name)
 	else:
