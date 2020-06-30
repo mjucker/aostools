@@ -1067,7 +1067,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		OUTPUTS:
 		Wx,Wy    : Activity Vectors along lon [m2/s2], lat [m2/s2]
 		Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
-		div      : Divergence of Wave Activity Flux [m/s/day]
+		div      : Divergence of horizontal Wave Activity Flux [m/s/day]
+		div3     : Divergence of vertical Wave Activity Flux [m/s/day]
 		'''
 	import numpy as np
 	from xarray import DataArray
@@ -1104,12 +1105,12 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		dpsi_dlon =  v
 		dpsi_dlat = -u
 		if use_windspharm:
-			vw = VectorWind(u,v)
+			vw = VectorWind(u,v,legfunc='computed')
 	else:
 		u = phi_or_u - uref
 		v = phiref_or_v - vref
 		if use_windspharm:
-			vw = VectorWind(u,v)
+			vw = VectorWind(u,v,legfunc='computed')
 		else:
 			vw = None
 		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw,**kwpsi)
@@ -1172,10 +1173,11 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		div1 = one_over_acoslat*div1*rad2deg
 		div2 = div2*rad2deg/a0
 
+	div = (div1+div2)*86400
+	div.name = 'div'
+	div.attrs['units'] = 'm/s/d'
+
 	if tref is None:
-		div = (div1+div2)*86400
-		div.name = 'div'
-		div.attrs['units'] = 'm/s/d'
 		return wx.where(mask),wy.where(mask),div.where(mask)
 	else:
 		# psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
@@ -1205,11 +1207,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		wz.attrs['alternative_units'] = 'kg/s4'
 
 		div3 = wz.differentiate(pres,edge_order=2)
-		div = (div1+div2+div3)*86400
-		div.name = 'div'
-		div.attrs['units'] = 'm/s/d'
+		div3.name = 'div'
+		div3.attrs['units'] = 'm/s/d'
 
-		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask)
+		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask),div3.where(mask)
 
 ##############################################################################################
 def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
