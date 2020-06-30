@@ -2030,3 +2030,21 @@ def RollingMeanStd(x,mean_std,r=31,dim='time'):
     x2 = xc.roll(dayofyear=-2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=2*r,roll_coords=True)
     xc = xr.where(np.isnan(x1),x2,x1)
     return xc
+
+#######################################################
+def Standardize(da,groupby='time.dayofyear'):
+	'''Standardize xr.DataArray on a frequency given by groupby.
+		This is from http://xarray.pydata.org/en/stable/examples/weather-data.html
+	'''
+	from xarray import apply_ufunc
+
+	time_name = groupby.split('.')[0]
+	climatology_mean = da.groupby(groupby).mean(time_name)
+	climatology_std = da.groupby(groupby).std(time_name)
+	stand_anomalies = apply_ufunc(
+	    lambda x, m, s: (x - m) / s,
+	    da.groupby(groupby),
+	    climatology_mean,
+	    climatology_std,
+	)
+	return stand_anomalies
