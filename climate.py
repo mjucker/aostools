@@ -1808,7 +1808,7 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	if lon_name is not None and data[lon_name].min() < 0:
 		data_low = data.sel({lon_name: slice(0,180)})
 		data_neg = data.sel({lon_name: slice(-180,-0.001)})
-		data_neg.assign_coords({lon_name: data_neg[lon_name]+360})
+		data_neg = data_neg.assign_coords({lon_name: data_neg[lon_name]+360})
 		data = xr.concat([data_low,data_neg],dim=lon_name)
 		return data.sortby(lon_name)
 	else:
