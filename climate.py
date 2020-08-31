@@ -1787,10 +1787,10 @@ def Convert2Days(time,units,calendar):
 	return t.date2num(date)
 
 #######################################################
-def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
+def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
 	"""
-		Invert the direction of latitude, and swap longitude domain
-		 from -180,180 to 0,360.
+		Make sure longitude is in [0,360] and latitude sorted
+                 from lowest to highest.
 		 Assumes an xr.DataArray or xr.Dataset.
 
 		INPUTS:
@@ -1798,22 +1798,26 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 			lon_name:  name of longitude dimension. Set to None if nothing should be done.
 			lat_name:  name of latitude dimension. Set to None if nothing should be done.
 		OUTPUTS:
-			data:     xarray.DataArray with latitude swapped and
-					   longitude from 0 to 360 degrees.
+			data:     xarray.DataArray with latitude from lowest to highest and
+					   longitude between 0 and 360 degrees.
 	"""
-	import xarray as xr
 	if lat_name is not None:
-		if data[lat_name][0] > data[lat_name][-1]:
-			data = data.interp({lat_name:data[lat_name][::-1]},method='nearest')
+	        if data[lat_name][0] > data[lat_name][-1]:
+                        data = data.sortby(lat_name)
 	if lon_name is not None and data[lon_name].min() < 0:
-		data_low = data.sel({lon_name: slice(0,180)})
-		data_neg = data.sel({lon_name: slice(-180,-0.001)})
-		data_neg = data_neg.assign_coords({lon_name: data_neg[lon_name]+360})
-		data = xr.concat([data_low,data_neg],dim=lon_name)
-		return data.sortby(lon_name)
+                data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
+                return data.sortby(lon_name)
 	else:
-		return data
-
+	        return data
+        
+#######################################################
+def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
+        """This function is deprecated. Please see StandardGrid().
+        """
+        import warnings
+        warnings.warn('ERA2Model() is deprecated. Please use StandardGrid() instead.')
+        return StandardGrid(data,lon_name,lat_name)
+        
 #######################################################
 def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
 	"""
