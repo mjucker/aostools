@@ -1080,6 +1080,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 			else:
 				raise ValueError('all inputs have to be xarray.DataArrays!')
 	p0 = 1.e3
+	rad2deg = 180/np.pi
 	radlat = np.deg2rad(phi_or_u[lat])
 	coslat = np.cos(radlat)
 	one_over_coslat2 = coslat**(-2)
@@ -1137,7 +1138,6 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		# wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 		#     + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-		rad2deg = 180/np.pi
 
 		wx =  uref*(dpsi_dlon**2        - one_over_acoslat*psi*d2psi_dlon2*rad2deg) \
 		    + vref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg)
@@ -1156,6 +1156,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	wy.attrs['units'] = 'm2/s2'
 	#
 	# Now compute the divergence
+        #  there is a good chance wx,wy contain NaNs (no propagation where u<0).
+        #  therefore, using windspharm for the gradients does not work and we fall
+        #  back to the conventional way of computing gradients.
+	use_windspharm = False
 	if use_windspharm:
 		# unfortunately, vw.gradient inverts the order of latitude
 		#  to get the same order, we multiply by an xr.DataArray with the same
@@ -1838,33 +1842,35 @@ def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5
 
 #######################################################
 def ComputeRossbyWaveSource(u,v):
-	"""
+        """
 		Compute the Rossby Wave Source.
 		This is directly from the windspharm documentation,
 		https://ajdawson.github.io/windspharm/latest/examples/rws_xarray.html
 
 		INPUTS:
-			u : zonal wind
-			v : meridional wind
+			u : zonal wind [m/s]
+			v : meridional wind [m/s]
 
 		OUTPUTS:
-			S : Rossby Wave Source
-	"""
-	from windspharm.xarray import VectorWind
-	# Create a VectorWind instance to handle the computations.
-	w = VectorWind(u, v)
+			S : Rossby Wave Source []
+        """
+        from windspharm.xarray import VectorWind
+        # Create a VectorWind instance to handle the computations.
+        w = VectorWind(u, v)
 
-	# Compute components of rossby wave source: absolute vorticity, divergence,
-	# irrotational (divergent) wind components, gradients of absolute vorticity.
-	eta = w.absolutevorticity()
-	div = w.divergence()
-	uchi, vchi = w.irrotationalcomponent()
-	etax, etay = w.gradient(eta)
-	etax.attrs['units'] = 'm**-1 s**-1'
-	etay.attrs['units'] = 'm**-1 s**-1'
+        # Compute components of rossby wave source: absolute vorticity, divergence,
+        # irrotational (divergent) wind components, gradients of absolute vorticity.
+        eta = w.absolutevorticity()
+        div = w.divergence()
+        uchi, vchi = w.irrotationalcomponent()
+        etax, etay = w.gradient(eta)
 
-	# Combine the components to form the Rossby wave source term.
-	return eta * -1. * div - (uchi * etax + vchi * etay)
+        # Combine the components to form the Rossby wave source term.
+        rws = eta * -1. * div - (uchi * etax + vchi * etay)
+        rws.name = 'rws'
+        rws.attrs['units'] = '1/s2'
+        rws.attrs['long_name'] = 'Rossby Wave Source'
+        return rws
 
 #######################################################
 def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_args=None):
@@ -1995,7 +2001,7 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 		lat_name = lat
 	if lon_name is not None or lat_name is not None:
 		print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
-		sst = ERA2Model(sst,lon_name,lat_name)
+		sst = StandardGrid(sst,lon_name,lat_name)
 
 	def NinoAvg(sst,nino,time,avg):
 		ssta = sst.sel(ninos[nino]).mean(dim=[lon,lat])
