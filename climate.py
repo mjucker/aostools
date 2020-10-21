@@ -1873,7 +1873,7 @@ def ComputeRossbyWaveSource(u,v):
         return rws
 
 #######################################################
-def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_args=None):
+def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',coast=False,kw_args=None):
 	"""
 		Create a new figure with a given projection. To plot data, invoke:
 			fig,ax,kw = Projection()
@@ -1881,6 +1881,8 @@ def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_ar
 
 		INPUTS:
 			projection:  desired map projection for plotting.
+			nrows:       how many rows in pyplot.subplots()
+			ncols:       how many columns in pyplot.subplots()
 			transform:   map projection of the data.
 			coast:       whether or not to draw coastlines (can be done later with ax.coastines())
 			kw_args:     keyword arguments (dict()) for projection.
@@ -1897,10 +1899,10 @@ def Projection(projection='EqualEarth',transform='PlateCarree',coast=False,kw_ar
 	else:
 		proj = cproj(**kw_args)
 	from matplotlib import pyplot as plt
-	fig = plt.figure()
-	ax  = plt.axes(projection=proj)
+	fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj})
 	if coast:
-		ax.coastlines()
+		for a in ax.flatten():
+			a.coastlines()
 	return fig,ax,{'transform':getattr(ccrs,transform)()}
 
 #######################################################
