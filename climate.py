@@ -1901,8 +1901,11 @@ def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',c
 	from matplotlib import pyplot as plt
 	fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj})
 	if coast:
-		for a in ax.flatten():
-			a.coastlines()
+                if nrows*ncols > 1:
+                        for a in ax.flatten():
+                                a.coastlines()
+                else:
+                        ax.coastlines()
 	return fig,ax,{'transform':getattr(ccrs,transform)()}
 
 #######################################################
