@@ -413,6 +413,48 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 			inFile.close()
 	return psi,psis
 
+##############################################################################################
+def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rolling-91', p0=1e3):
+	"""Computes the residual stream function \Psi* (as a function of time).
+
+		INPUTS:
+			v           - meridional wind, xr.DataArray
+                        t           - temperature, xr.DataArray
+			lon         - name of longitude in t
+			lat         - name of latitude in t
+			pres        - name of pressure in t [hPa]
+			time        - name of time field in t
+                        ref         - how to treat dTheta/dp: 
+                                       - 'rolling-X' : centered rolling mean over X days
+                                       - 'mean'      : full time mean
+			p0          - pressure basis to compute potential temperature [hPa]
+		OUTPUTS:
+			psi         - stream function, as a function of time
+			psis        - residual stream function, as a function of time
+	"""
+	from scipy.integrate import cumtrapz
+	from numpy import cos,deg2rad
+	# some constants
+	kappa = 2./7
+	a0    = 6371000
+	g     = 9.81
+	#
+	## compute psi
+	v_bar,t_bar = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref) # t_bar = bar(v'Th'/(dTh_bar/dp))
+
+	# Eulerian streamfunction
+	pdim = v_bar.get_axis_num(pres)
+	psi = v_bar.reduce(cumtrapz,x=v_bar[pres],axis=pdim,initial=0) # [m.hPa/s]
+
+
+	## compute psi* = psi - bar(v'Th'/(dTh_bar/dp))
+	psis = psi - t_bar
+	coslat = np.cos(np.deg2rad(t[lat]))
+	psi = 2*np.pi*a0/g*psi *coslat*100 #[kg/s]
+	psis= 2*np.pi*a0/g*psis*coslat*100 #[kg/s]
+	
+	return psi,psis
+
 
 ##############################################################################################
 ## helper functions
@@ -490,6 +532,52 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	else:
 		t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
 	t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
+	#
+	return v_bar,t_bar
+
+def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91',wave=-1):
+	""" Computes the vertical eddy components of the residual circulation,
+		bar(v'Theta'/Theta_p). 
+		Output units are [v_bar] = [v], [t_bar] = [v*p]
+
+		INPUTS:
+			v    - meridional wind, xr.DataArray
+			t    - temperature, xr.DataArray
+			p    - name of pressure
+			p0   - reference pressure for potential temperature
+                        lon  - name of longitude
+			time - name of time field in t
+                        ref  - how to treat dTheta/dp: 
+                               - 'rolling-X' : centered rolling mean over X days
+                               - 'mean'      : full time mean
+			wave - wave number (if >=0)
+		OUPUTS:
+			v_bar - zonal mean meridional wind [v]
+			t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
+	"""
+	#
+	# some constants
+	kappa = 2./7
+	#
+	# pressure quantitites
+	pp0 = (p0/t[p])**kappa
+	# convert to potential temperature
+	t = t*pp0 # t = theta
+	# zonal means
+	v_bar = v.mean(lon)
+	t_bar = t.mean(lon) # t_bar = theta_bar
+	# prepare pressure derivative
+	dthdp = t_bar.differentiate(p,edge_order=2) # dthdp = d(theta_bar)/dp
+	dthdp = dthdp.where(dthdp != 0)
+	# time mean of d(theta_bar)/dp
+	if 'rolling' in ref:
+		r = int(ref.split('-')[-1])
+		dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
+	elif ref == 'mean':
+		dthdp = dthdp.mean(time)
+
+	vpTp  = (v - v_bar)*(t - t_bar)
+	t_bar = vpTp.mean(lon)/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
 	#
 	return v_bar,t_bar
 
