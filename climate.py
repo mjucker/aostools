@@ -1893,10 +1893,10 @@ def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
 			data:     xarray.DataArray with latitude from lowest to highest and
 					   longitude between 0 and 360 degrees.
 	"""
-	if lat_name is not None:
+	if lat_name is not None and lat_name in data.coords:
 	        if data[lat_name][0] > data[lat_name][-1]:
                         data = data.sortby(lat_name)
-	if lon_name is not None and data[lon_name].min() < 0:
+	if lon_name is not None and lon_name in data.coords and data[lon_name].min() < 0:
                 data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
                 return data.sortby(lon_name)
 	else:
