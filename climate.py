@@ -47,16 +47,16 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 		ComputeClimate(file,climatType,wkdir='/',timeDim='time')
 
 		Inputs:
-		file        file name, relative path from wkdir
+		file	    file name, relative path from wkdir
 		climatType  'daily', 'monthly', 'annual', 'DJF', 'JJA', or any
 					combination of months according to two-letter code
 					Ja Fe Ma Ap My Jn Jl Au Se Oc No De
-		wkdir       working directory, in which 'file' must be, and to which the output
+		wkdir	    working directory, in which 'file' must be, and to which the output
 					is written
-		timeDim     name of the time dimension in the netcdf file
-		cal         calendar, if other than within the netcdf file
+		timeDim	    name of the time dimension in the netcdf file
+		cal	    calendar, if other than within the netcdf file
 		Outputs:
-		outFile     name of the output file created
+		outFile	    name of the output file created
 		writes outputfile with name depending on input file name and climatType
 	"""
 
@@ -81,7 +81,7 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 	else:
 		raise IOError(wkdir+file+' does not exist')
 
-	time    = ncFile.variables[timeDim][:]
+	time	= ncFile.variables[timeDim][:]
 	numTimeSteps = len(time)
 	timeVar = ncFile.variables[timeDim]
 	# check the time units
@@ -188,13 +188,13 @@ def ComputeClimate(file, climatType, wkdir='/', timeDim='time',cal=None):
 		varShape = np.shape(ncFile.variables[var])
 		if len(varShape) == 0: continue
 		if varShape[0] == numTimeSteps and len(varShape) >= 2:
-			print('                     ',var)
+			print('			    ',var)
 			tmpVar = ncFile.variables[var][:]
 			if climType != 'daily' and climType != 'monthly':
 				outVar = outFile.createVariable(var,str(ncFile.variables[var].dtype),ncFile.variables[var].dimensions[1:])
 				tmpAvg = tmpVar[climTimeVar>0,:].mean(axis=0)
 			else:
-				outVar = outFile.createVariable(var,str(ncFile.variables[var].dtype),ncFile.variables[var].dimensions    )
+				outVar = outFile.createVariable(var,str(ncFile.variables[var].dtype),ncFile.variables[var].dimensions	 )
 				avgShape = []
 				avgShape.append(nTime)
 				for t in range(len(np.shape(outVar))-1):
@@ -280,14 +280,14 @@ def ComputeRelativeHumidity(inFile, pDim, outFile='none', temp='temp', sphum='sp
 		Relative humidity is either output of the function, or written to the file outFile.
 
 		Inputs:
-			inFile    Name of the file (full path)
+			inFile	  Name of the file (full path)
 						containing temperature and moisture
-			pDim      Index of pressure dimension within temperature array
-			outFile   Name of the output file containing specific humidity.
+			pDim	  Index of pressure dimension within temperature array
+			outFile	  Name of the output file containing specific humidity.
 						No output file is created if outFile='none'
-			temp      Name of the temperature variable inside inFile
-			sphum     Name of specific humidity variable inside inFile
-			pfull     Name of full level pressure [hPa] inside inFile
+			temp	  Name of the temperature variable inside inFile
+			sphum	  Name of specific humidity variable inside inFile
+			pfull	  Name of full level pressure [hPa] inside inFile
 	"""
 
 	import netCDF4 as nc
@@ -322,17 +322,17 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 	"""Computes the residual stream function \Psi* (as a function of time).
 
 		INPUTS:
-			data        - filename of input file or dictionary with temp,vcomp,lat,pfull
+			data	    - filename of input file or dictionary with temp,vcomp,lat,pfull
 			outFileName - filename of output file, 'none', or 'same'
-			temp        - name of temperature field in inFile
-			vcomp       - name of meridional velocity field in inFile
-			lat         - name of latitude in inFile
-			pfull       - name of pressure in inFile [hPa]
-			time        - name of time field in inFile. Only needed if outFile used
-			p0          - pressure basis to compute potential temperature [hPa]
+			temp	    - name of temperature field in inFile
+			vcomp	    - name of meridional velocity field in inFile
+			lat	    - name of latitude in inFile
+			pfull	    - name of pressure in inFile [hPa]
+			time	    - name of time field in inFile. Only needed if outFile used
+			p0	    - pressure basis to compute potential temperature [hPa]
 		OUTPUTS:
-			psi         - stream function, as a function of time
-			psis        - residual stream function, as a function of time
+			psi	    - stream function, as a function of time
+			psis	    - residual stream function, as a function of time
 	"""
 	import netCDF4 as nc
 	from scipy.integrate import cumtrapz
@@ -418,19 +418,19 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rol
 	"""Computes the residual stream function \Psi* (as a function of time).
 
 		INPUTS:
-			v           - meridional wind, xr.DataArray
-                        t           - temperature, xr.DataArray
-			lon         - name of longitude in t
-			lat         - name of latitude in t
-			pres        - name of pressure in t [hPa]
-			time        - name of time field in t
-                        ref         - how to treat dTheta/dp: 
-                                       - 'rolling-X' : centered rolling mean over X days
-                                       - 'mean'      : full time mean
-			p0          - pressure basis to compute potential temperature [hPa]
+			v	    - meridional wind, xr.DataArray
+			t	    - temperature, xr.DataArray
+			lon	    - name of longitude in t
+			lat	    - name of latitude in t
+			pres	    - name of pressure in t [hPa]
+			time	    - name of time field in t
+			ref	    - how to treat dTheta/dp: 
+				       - 'rolling-X' : centered rolling mean over X days
+				       - 'mean'	     : full time mean
+			p0	    - pressure basis to compute potential temperature [hPa]
 		OUTPUTS:
-			psi         - stream function, as a function of time
-			psis        - residual stream function, as a function of time
+			psi	    - stream function, as a function of time
+			psis	    - residual stream function, as a function of time
 	"""
 	from scipy.integrate import cumtrapz
 	from numpy import cos,deg2rad
@@ -480,7 +480,7 @@ def update_progress(progress,barLength=10,info=None):
 		text = '\r'
 	if progress == 1:
 		if info is not None:
-			text = "\r{0}   {1}     {2}".format(" "*(len(info)+1)," "*barLength,status)
+			text = "\r{0}	{1}	{2}".format(" "*(len(info)+1)," "*barLength,status)
 		else:
 			text = "\r   {0}     {1}".format(" "*barLength,status)
 	else:
@@ -535,7 +535,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	#
 	return v_bar,t_bar
 
-def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91',wave=-1):
+def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91'):
 	""" Computes the vertical eddy components of the residual circulation,
 		bar(v'Theta'/Theta_p). 
 		Output units are [v_bar] = [v], [t_bar] = [v*p]
@@ -545,12 +545,11 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91
 			t    - temperature, xr.DataArray
 			p    - name of pressure
 			p0   - reference pressure for potential temperature
-                        lon  - name of longitude
+			lon  - name of longitude
 			time - name of time field in t
-                        ref  - how to treat dTheta/dp: 
-                               - 'rolling-X' : centered rolling mean over X days
-                               - 'mean'      : full time mean
-			wave - wave number (if >=0)
+			ref  - how to treat dTheta/dp: 
+			       - 'rolling-X' : centered rolling mean over X days
+			       - 'mean'	     : full time mean
 		OUPUTS:
 			v_bar - zonal mean meridional wind [v]
 			t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
@@ -589,8 +588,8 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 		The field X can be reconstructed with Y = dot(EOF,PC) + X.mean(axis=time)
 
 		INPUTS:
-			X       -- Field, shape (time x space).
-			n       -- Number of modes to extract. All modes if n < 0
+			X	-- Field, shape (time x space).
+			n	-- Number of modes to extract. All modes if n < 0
 			detrend -- detrend with global mean ('constant')
 						  or linear trend ('linear')
 		    eof_in  -- If not None, compute PC by projecting eof onto X.
@@ -647,7 +646,7 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 		# replace time dimension with modes at the end of the array
 		newshape = list(shpe[1:])+[n]
 		EOF = EOF.reshape(newshape)
-		u   = u  .reshape(newshape)
+		u   = u	 .reshape(newshape)
 	return EOF,PC,E,u,s,v
 
 
@@ -675,9 +674,9 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 						'constant' -> remove total time mean
 			eof_in - if None, compute EOF1 as usual.
 					 if the EOF1 is already known, use this instead of
-			            computing it again.
+				    computing it again.
 			pc_in  - if None, standardize PC1 to its own mean and std deviation
-			         else, use pc_in mean and std deviation to standardize.
+				 else, use pc_in mean and std deviation to standardize.
 			eof_out- whether or not to pass the first EOF as output [False].
 			pc_out - whether or not to pass the first PC as output [False].
 		OUTPUT:
@@ -769,7 +768,7 @@ def ComputeVstar(data, temp='temp', vcomp='vcomp', pfull='pfull', wave=-1, p0=1e
 			wave  - decompose into given wave number contribution if wave>=0
 			p0    - pressure basis to compute potential temperature [hPa]
 		OUTPUTS:
-			vstar       - residual meridional wind, as a function of time
+			vstar	    - residual meridional wind, as a function of time
 	"""
 	import netCDF4 as nc
 
@@ -864,6 +863,57 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
 		return w_bar + np.squeeze(R*vt_bar)
 	else:
 		return w_bar + R*vt_bar
+
+##############################################################################################
+def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time='time', ref='rolling-91', p0=1e3, is_Pa='omega'):
+	"""Computes the residual upwelling w*. omega, temp, vcomp are xarray.DataArrays.
+
+		Output units are the same as the units of omega, and the pressure coordinate is expected in hPa, latitude in degrees.
+
+		INPUTS:
+			omega - pressure velocity. xarray.DataArray
+			temp  - temperature. xarray.DataArray
+			vcomp - meridional velocity. xarray.DataArray
+			pfull - name of pressure coordinate.
+			lon   - name of longitude coordinate
+			lat   - name of latitude coordinate
+			time  - name of time coordinate
+			ref   - how to treat dTheta/dp: 
+				- 'rolling-X' : centered rolling mean over X days
+				- 'mean'      : full time mean
+			p0    - pressure basis to compute potential temperature [hPa]
+			is_Pa - correct for pressure units in variables:
+				- None: omega, p0 and pres are all in hPa or all in Pa
+				- 'omega': omega is in Pa/s but pres and p0 in hPa
+				- 'pres' : omega is in hPa/s, p0 in hPa, but pres in Pa
+		OUTPUTS:
+			residual pressure velocity, same units as omega
+	"""
+	import numpy as np
+	
+	a0    = 6371000.
+
+	# spherical geometry
+	coslat = np.cos(np.deg2rad(omega[lat]))
+	R = a0*coslat
+	R = 1./R
+	# correct for units: hPa<->Pa
+	if is_Pa is not None:
+		if is_Pa.lower() == 'omega':
+			R = R*100
+		elif is_Pa.lower() == 'pres':
+			R  = R*0.01
+			p0 = p0*100
+        # correct for units: degrees<->radians
+	R = R*180/np.pi
+	# compute thickness weighted meridional heat flux
+	_,vt_bar = ComputeVertEddyXr(vcomp, temp, pres, p0, lon, time, ref)
+	# get the meridional derivative
+	vt_bar = (coslat*vt_bar).differentiate(lat)
+	# compute zonal mean upwelling
+	w_bar = omega.mean(lon)
+	# put it all together
+	return w_bar + R*vt_bar
 
 ##############################################################################################
 def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
@@ -980,17 +1030,17 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 		than using windspharm.
 
 		INPUTS:
-			u              : zonal wind. xarray.DataArray.
-			v              : meridional wind. xarray.DataArray.
-			lat            : name of latitude in u,v.
-			lon            : name of longitude on u,v.
+			u	       : zonal wind. xarray.DataArray.
+			v	       : meridional wind. xarray.DataArray.
+			lat	       : name of latitude in u,v.
+			lon	       : name of longitude on u,v.
 			use_windspharm : whether or not to use windspharm. If False, use direct integration method.
-			lat0           : reference latitude for direct integration method.
-			lon0           : reference longitude for direct integration method.
-			method         : integrate over u ('u') or v ('v') or both ('uv'). Only for direct integration method.
-			smooth         : smooth streamfunction after integration via rolling mean. If not None, should be a dictionary
-			                  containing the roll window for each dimension, e.g. {'lon':5,'lat':3}.
-			vw             : if use_windspharm = True, save time by also sending VectorWind object.
+			lat0	       : reference latitude for direct integration method.
+			lon0	       : reference longitude for direct integration method.
+			method	       : integrate over u ('u') or v ('v') or both ('uv'). Only for direct integration method.
+			smooth	       : smooth streamfunction after integration via rolling mean. If not None, should be a dictionary
+					  containing the roll window for each dimension, e.g. {'lon':5,'lat':3}.
+			vw	       : if use_windspharm = True, save time by also sending VectorWind object.
 		OUTPUTS:
 			psi : streamfunction
 			wv  : windspharm.VectorWind object. Only applies if use_windspharm = True
@@ -1080,7 +1130,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 			if i0 < nlon-1:
 				integrand_a = integrand.isel({lon:slice(i0,None)})
 				psi_1a = cumtrapz(integrand_a,x=lons[i0:],axis=lonind,initial=0)
-				psi1ax  = DataArray(psi_1a,integrand_a.coords,name='psi')
+				psi1ax	= DataArray(psi_1a,integrand_a.coords,name='psi')
 			else:
 				psi1ax = 0*integrand
 			if i0 > 0:
@@ -1138,25 +1188,25 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
 		phiref_or_v: reference geopotential [m2/s2] (qg = True)
 						OR (full) meridional wind [m/s] (qg = False)
-		uref       : reference zonal wind [m/s]
-		vref       : reference meridional wind [m/s]
-		lat        : name of latitude in DataArrays
-		lon        : name of longitude in DataArrays
-		pres       : name of pressure in DataArrays [hPa]
-		tref       : reference temperature [K] for static stability parameter S2.
+		uref	   : reference zonal wind [m/s]
+		vref	   : reference meridional wind [m/s]
+		lat	   : name of latitude in DataArrays
+		lon	   : name of longitude in DataArrays
+		pres	   : name of pressure in DataArrays [hPa]
+		tref	   : reference temperature [K] for static stability parameter S2.
 					   If None, only compute horizontal wave flux.
 					   Else, used to compute S2.
 						 If xr.Dataset or xr.DataArray, compute S2 assuming tref is temperature [K].
 						 Else, assume S2 = tref.
 						 Note that S2 should be a function of
 						  pressure only (see Vallis 2017, Eq 5.127)
-		qg         : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
+		qg	   : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
 					   Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
 		OUTPUTS:
-		Wx,Wy    : Activity Vectors along lon [m2/s2], lat [m2/s2]
+		Wx,Wy	 : Activity Vectors along lon [m2/s2], lat [m2/s2]
 		Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
-		div      : Divergence of horizontal Wave Activity Flux [m/s/day]
-		div3     : Divergence of vertical Wave Activity Flux [m/s/day]
+		div	 : Divergence of horizontal Wave Activity Flux [m/s/day]
+		div3	 : Divergence of vertical Wave Activity Flux [m/s/day]
 		'''
 	import numpy as np
 	from xarray import DataArray
@@ -1221,16 +1271,16 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m/s/deg_lat]
 		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m/s/deg_lat]
 
-		# wx =  uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+		# wx =	uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
 		#     + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-		# wy =  uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+		# wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 		#     + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
 
-		wx =  uref*(dpsi_dlon**2        - one_over_acoslat*psi*d2psi_dlon2*rad2deg) \
+		wx =  uref*(dpsi_dlon**2	- one_over_acoslat*psi*d2psi_dlon2*rad2deg) \
 		    + vref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg)
 		wy =  uref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg) \
-		    + vref*(dpsi_dlat**2        - one_over_acoslat*psi*d2psi_dlat2*rad2deg)
+		    + vref*(dpsi_dlat**2	- one_over_acoslat*psi*d2psi_dlat2*rad2deg)
 
 		coeff = coslat/2/mag_u
 
@@ -1244,9 +1294,9 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 	wy.attrs['units'] = 'm2/s2'
 	#
 	# Now compute the divergence
-        #  there is a good chance wx,wy contain NaNs (no propagation where u<0).
-        #  therefore, using windspharm for the gradients does not work and we fall
-        #  back to the conventional way of computing gradients.
+	#  there is a good chance wx,wy contain NaNs (no propagation where u<0).
+	#  therefore, using windspharm for the gradients does not work and we fall
+	#  back to the conventional way of computing gradients.
 	use_windspharm = False
 	if use_windspharm:
 		# unfortunately, vw.gradient inverts the order of latitude
@@ -1310,27 +1360,27 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
 	INPUTS:
-		x       : horizontal coordinate, assumed in degrees (latitude) [degrees]
-		y       : vertical coordinate, any units, but usually this is pressure or height
-		ep1     : horizontal Eliassen-Palm flux component, in [m2/s2]. Typically, this is ep1_cart from
+		x	: horizontal coordinate, assumed in degrees (latitude) [degrees]
+		y	: vertical coordinate, any units, but usually this is pressure or height
+		ep1	: horizontal Eliassen-Palm flux component, in [m2/s2]. Typically, this is ep1_cart from
 				   ComputeEPfluxDiv()
-		ep2     : vertical Eliassen-Palm flux component, in [U.m/s2], where U is the unit of y.
+		ep2	: vertical Eliassen-Palm flux component, in [U.m/s2], where U is the unit of y.
 				   Typically, this is ep2_cart from ComputeEPfluxDiv(), in [hPa.m/s2] and y is pressure [hPa].
-		fig     : a matplotlib figure object. This figure contains the axes ax.
-		ax      : a matplotlib axes object. This is where the arrows will be plotted onto.
-		xlim    : axes limits in x-direction. If None, use [min(x),max(x)]. [None]
-		ylim    : axes limits in y-direction. If None, use [min(y),max(y)]. [None]
-		xscale  : x-axis scaling. currently only 'linear' is supported. ['linear']
-		yscale  : y-axis scaling. 'linear' or 'log' ['linear']
+		fig	: a matplotlib figure object. This figure contains the axes ax.
+		ax	: a matplotlib axes object. This is where the arrows will be plotted onto.
+		xlim	: axes limits in x-direction. If None, use [min(x),max(x)]. [None]
+		ylim	: axes limits in y-direction. If None, use [min(y),max(y)]. [None]
+		xscale	: x-axis scaling. currently only 'linear' is supported. ['linear']
+		yscale	: y-axis scaling. 'linear' or 'log' ['linear']
 		invert_y: invert y-axis (for pressure coordinates). [True]
-		newax   : plot on second y-axis. [False]
-		pivot   : keyword argument for quiver() ['tail']
-		scale   : keyword argument for quiver(). Smaller is longer [None]
+		newax	: plot on second y-axis. [False]
+		pivot	: keyword argument for quiver() ['tail']
+		scale	: keyword argument for quiver(). Smaller is longer [None]
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
 	   Fp*dy   : y-component of properly scaled arrows. Units of [m3.inches]
-	   ax   : secondary y-axis if newax == True
+	   ax	: secondary y-axis if newax == True
 	"""
 	import numpy as np
 	import matplotlib.pyplot as plt
@@ -1480,10 +1530,10 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
 
 		INPUTS:
-			lat       - latitude [degrees]
-			pres      - pressure [hPa]
-			uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
-			Tz        - zonal mean temperature [K], dim pres x lat OR N x pres x lat
+			lat	  - latitude [degrees]
+			pres	  - pressure [hPa]
+			uz	  - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
+			Tz	  - zonal mean temperature [K], dim pres x lat OR N x pres x lat
 			component - option to only return one, two, or all of the components.
 						 Add a letter for each of the components 'A', 'B', 'C'.
 						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
@@ -1624,13 +1674,13 @@ def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
 		If y=[] and wave=-1, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
 
 	INPUTS:
-		x          - the array to decompose
-		y          - second array if wanted
-		wave       - which mode to extract. all if <0
-		axis       - along which axis of x (and y) to decompose
+		x	   - the array to decompose
+		y	   - second array if wanted
+		wave	   - which mode to extract. all if <0
+		axis	   - along which axis of x (and y) to decompose
 		do_anomaly - decompose from anomalies or full data
 	OUTPUTS:
-		xym        - data in Fourier space
+		xym	   - data in Fourier space
 	"""
 	initShape = x.shape
 	x = AxRoll(x,axis)
@@ -1736,8 +1786,8 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 		if ndims > 1:
 			tmp = AxRoll(data,axis)
 	# else:
-	# 	tmp = data
-	# 	out = np.zeros_like(tmp)
+	#	tmp = data
+	#	out = np.zeros_like(tmp)
 	else:
 		raise ValueError("mode not recognized")
 	if mode is 'm2lon':
@@ -1782,16 +1832,16 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
 		optionally integrated from the surface to minPres.
 
 		INPUTS:
-		lat     - latitude [degrees]
-		tempIn  - temperature, shape time x pressure x lat
-		hemi    - hemisphere to consider. 'both','N','S'
-		minLat  - latitude closest to equator
-		maxLat  - latitdue closest to pole
-		pres    - pressure [hPa]
+		lat	- latitude [degrees]
+		tempIn	- temperature, shape time x pressure x lat
+		hemi	- hemisphere to consider. 'both','N','S'
+		minLat	- latitude closest to equator
+		maxLat	- latitdue closest to pole
+		pres	- pressure [hPa]
 		minPres - top of pressure averaging from surface.
 					only used if pres is not None.
 		OUTPUT:
-		dT      - dictionary with options ['S'] and ['N'] if hemi='both'
+		dT	- dictionary with options ['S'] and ['N'] if hemi='both'
 					otherwise array of length len(time)
 	"""
 
@@ -1882,34 +1932,34 @@ def Convert2Days(time,units,calendar):
 def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
 	"""
 		Make sure longitude is in [0,360] and latitude sorted
-                 from lowest to highest.
+		 from lowest to highest.
 		 Assumes an xr.DataArray or xr.Dataset.
 
 		INPUTS:
-			data:      xarray.DataArray or xarray.Dataset to regrid
+			data:	   xarray.DataArray or xarray.Dataset to regrid
 			lon_name:  name of longitude dimension. Set to None if nothing should be done.
 			lat_name:  name of latitude dimension. Set to None if nothing should be done.
 		OUTPUTS:
-			data:     xarray.DataArray with latitude from lowest to highest and
+			data:	  xarray.DataArray with latitude from lowest to highest and
 					   longitude between 0 and 360 degrees.
 	"""
 	if lat_name is not None and lat_name in data.coords:
-	        if data[lat_name][0] > data[lat_name][-1]:
-                        data = data.sortby(lat_name)
+		if data[lat_name][0] > data[lat_name][-1]:
+			data = data.sortby(lat_name)
 	if lon_name is not None and lon_name in data.coords and data[lon_name].min() < 0:
-                data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
-                return data.sortby(lon_name)
+		data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
+		return data.sortby(lon_name)
 	else:
-	        return data
-        
+		return data
+	
 #######################################################
 def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
-        """This function is deprecated. Please see StandardGrid().
-        """
-        import warnings
-        warnings.warn('ERA2Model() is deprecated. Please use StandardGrid() instead.')
-        return StandardGrid(data,lon_name,lat_name)
-        
+	"""This function is deprecated. Please see StandardGrid().
+	"""
+	import warnings
+	warnings.warn('ERA2Model() is deprecated. Please use StandardGrid() instead.')
+	return StandardGrid(data,lon_name,lat_name)
+	
 #######################################################
 def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
 	"""
@@ -1930,7 +1980,7 @@ def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5
 
 #######################################################
 def ComputeRossbyWaveSource(u,v):
-        """
+	"""
 		Compute the Rossby Wave Source.
 		This is directly from the windspharm documentation,
 		https://ajdawson.github.io/windspharm/latest/examples/rws_xarray.html
@@ -1941,24 +1991,24 @@ def ComputeRossbyWaveSource(u,v):
 
 		OUTPUTS:
 			S : Rossby Wave Source []
-        """
-        from windspharm.xarray import VectorWind
-        # Create a VectorWind instance to handle the computations.
-        w = VectorWind(u, v)
+	"""
+	from windspharm.xarray import VectorWind
+	# Create a VectorWind instance to handle the computations.
+	w = VectorWind(u, v)
 
-        # Compute components of rossby wave source: absolute vorticity, divergence,
-        # irrotational (divergent) wind components, gradients of absolute vorticity.
-        eta = w.absolutevorticity()
-        div = w.divergence()
-        uchi, vchi = w.irrotationalcomponent()
-        etax, etay = w.gradient(eta)
+	# Compute components of rossby wave source: absolute vorticity, divergence,
+	# irrotational (divergent) wind components, gradients of absolute vorticity.
+	eta = w.absolutevorticity()
+	div = w.divergence()
+	uchi, vchi = w.irrotationalcomponent()
+	etax, etay = w.gradient(eta)
 
-        # Combine the components to form the Rossby wave source term.
-        rws = eta * -1. * div - (uchi * etax + vchi * etay)
-        rws.name = 'rws'
-        rws.attrs['units'] = '1/s2'
-        rws.attrs['long_name'] = 'Rossby Wave Source'
-        return rws
+	# Combine the components to form the Rossby wave source term.
+	rws = eta * -1. * div - (uchi * etax + vchi * etay)
+	rws.name = 'rws'
+	rws.attrs['units'] = '1/s2'
+	rws.attrs['long_name'] = 'Rossby Wave Source'
+	return rws
 
 #######################################################
 def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',coast=False,kw_args=None):
@@ -1969,16 +2019,16 @@ def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',c
 
 		INPUTS:
 			projection:  desired map projection for plotting.
-			nrows:       how many rows in pyplot.subplots()
-			ncols:       how many columns in pyplot.subplots()
+			nrows:	     how many rows in pyplot.subplots()
+			ncols:	     how many columns in pyplot.subplots()
 			transform:   map projection of the data.
-			coast:       whether or not to draw coastlines (can be done later with ax.coastines())
+			coast:	     whether or not to draw coastlines (can be done later with ax.coastines())
 			kw_args:     keyword arguments (dict()) for projection.
 
 		OUTPUTS:
-			fig:         figure object
-			ax:          axis with map projection
-			transf:      transform in form of dictionary.
+			fig:	     figure object
+			ax:	     axis with map projection
+			transf:	     transform in form of dictionary.
 	"""
 	from cartopy import crs as ccrs
 	cproj = getattr(ccrs,projection)
@@ -1989,11 +2039,11 @@ def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',c
 	from matplotlib import pyplot as plt
 	fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj})
 	if coast:
-                if nrows*ncols > 1:
-                        for a in ax.flatten():
-                                a.coastlines()
-                else:
-                        ax.coastlines()
+		if nrows*ncols > 1:
+			for a in ax.flatten():
+				a.coastlines()
+		else:
+			ax.coastlines()
 	return fig,ax,{'transform':getattr(ccrs,transform)()}
 
 #######################################################
@@ -2007,18 +2057,18 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 		u,v,w must be xarray.DataArrays, and longitude, latitude in degrees.
 
 		INPUTS:
-			u,v,w   : x-, y-, and z-components of Cartesian vector
+			u,v,w	: x-, y-, and z-components of Cartesian vector
 			lon,lat : names of longitude and latitude in DataArray u.
 						Angles are in degrees.
-			pres    : None: don't do anything with the vertical coodinate
+			pres	: None: don't do anything with the vertical coodinate
 					  string: name of pressure coordinate. Will then be converted
-					  		  to log-pressure with a scale height of H and a base
+							  to log-pressure with a scale height of H and a base
 							  pressure of p0.
-			H       : Scale height. A priori, this is in meters. But this parameter
+			H	: Scale height. A priori, this is in meters. But this parameter
 						can be used to adjust for aspect ratio. For instance, if one
 						wants more detail in the vertical, making H 10x larger results
 						in a 10x "deeper" atmosphere with respect to Earth's radius.
-			p0      : Base pressure. This should probably never be changed.
+			p0	: Base pressure. This should probably never be changed.
 
 	"""
 	from xarray import DataArray
@@ -2040,7 +2090,7 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 	# transform vector into spherical geometry
 	a = -u*sinlon -v*sinlat*coslon +c*coslat*coslon
 	b =  u*coslon -v*sinlat*sinlon +c*coslat*sinlon
-	c =            v*coslat        +c*sinlat
+	c =	       v*coslat	       +c*sinlat
 	a.name = u.name
 	b.name = v.name
 	c.name = w.name
@@ -2115,24 +2165,24 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 
 #######################################################
 def RollingMeanStd(x,mean_std,r=31,dim='time'):
-    '''Compute climatological standard deviation or mean, smoothed by a rolling mean on day of year.
+	'''Compute climatological standard deviation or mean, smoothed by a rolling mean on day of year.
 
-    INPUTS;
-        x       : DataArray on which to operate on.
-        mean_std: either 'mean' or 'std' depending on what you want to do.
-    '''
-    import xarray as xr
-    import numpy as np
-    if mean_std == 'mean':
-        xc = x.groupby(dim+'.dayofyear').mean()
-    elif mean_std == 'std':
-        xc = x.groupby(dim+'.dayofyear').std()
-    else:
-        raise ValueError("mean_std has to be 'mean' or 'std' but is "+mean_std)
-    x1 = xc.roll(dayofyear=2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=-2*r,roll_coords=True)
-    x2 = xc.roll(dayofyear=-2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=2*r,roll_coords=True)
-    xc = xr.where(np.isnan(x1),x2,x1)
-    return xc
+	INPUTS;
+	x	: DataArray on which to operate on.
+	mean_std: either 'mean' or 'std' depending on what you want to do.
+	'''
+	import xarray as xr
+	import numpy as np
+	if mean_std == 'mean':
+		xc = x.groupby(dim+'.dayofyear').mean()
+	elif mean_std == 'std':
+		xc = x.groupby(dim+'.dayofyear').std()
+	else:
+		raise ValueError("mean_std has to be 'mean' or 'std' but is "+mean_std)
+	x1 = xc.roll(dayofyear=2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=-2*r,roll_coords=True)
+	x2 = xc.roll(dayofyear=-2*r,roll_coords=True).rolling(dayofyear=r,center=True).mean().roll(dayofyear=2*r,roll_coords=True)
+	xc = xr.where(np.isnan(x1),x2,x1)
+	return xc
 
 #######################################################
 def Standardize(da,groupby='time.dayofyear'):
