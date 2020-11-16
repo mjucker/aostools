@@ -1363,6 +1363,27 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
 	return N2
 
 ##############################################################################################
+def ComputeN2Xr(Tz,pres='level',H=7.e3,Rd=287.04,cp=1004):
+	''' Compute the Brunt-Vaisala frequency from zonal mean temperature
+		 N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+		 this is equivalent to
+		 N2 = g/\theta d\theta/dz, with p = p0 exp(-z/H)
+
+		INPUTS:
+			Tz    - zonal mean temperature [K], xarray.DataArray
+			pres  - name of pressure [hPa]
+			H     - scale height [m]
+			Rd    - specific gas constant for dry air
+			cp    - specific heat of air at constant pressure
+		OUTPUTS:
+			N2  - Brunt-Vaisala frequency, [1/s2], dim pres x lat
+	'''
+	dTdp = Tz.differentiate(pres,edge_order=2)*0.01
+	p = Tz[pres]*100. # [Pa]
+	N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
+	return N2
+
+##############################################################################################
 # @jit
 def FlexiGradPhi(data,dphi):
 	if len(data.shape) == 3:
@@ -1461,7 +1482,74 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 	#
 	return result
 
+##############################################################################################
+def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=1004, a0=6.371e6, component='ABC'):
+	'''Compute the meridional gradient of potential vorticity.
+		Computed following Simpson et al JAS (2009) DOI 10.1175/2008JAS2758.1.
+		This quantity has three terms,
+		q_\phi = A - B + C, where
+				A = 2*Omega*cos\phi
+				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
 
+		INPUTS:
+			uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
+			Tz        - zonal mean temperature [K], dim pres x lat OR N x pres x lat
+			lat       - name of latitude [degrees]
+			pres      - name of
+				lat       - latitude [degrees]
+				pres      - pressure [hPa]pressure [hPa]
+			component - option to only return one, two, or all of the components.
+						 Add a letter for each of the components 'A', 'B', 'C'.
+						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
+		OUTPUTS:
+			q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR N x pres x lat
+	'''
+	if not ('A' in component)+('B' in component)+('C' in component):
+		raise ValueError('component has to contain A,B and/or C, but got '+component)
+	# some constants
+	Omega = 2*np.pi/(86400.) # [1/s]
+	p0    = 1e3 #[hPa]
+	coslat = np.cos(np.deg2rad(uz[lat]))
+	factor_phi = 180/np.pi
+	factor_pres= 0.01
+
+	#
+	result = uz*0
+	## first term A
+	if 'A' in component:
+		A = 2*Omega*coslat
+		result += A
+
+	#
+	## second term B
+	if 'B' in component:
+		dudphi = (coslat*uz).differentiate(lat,edge_order=2)*factor_phi
+		B = dudphi/coslat/a0
+		B = B.differentiate(lat,edge_order=2)*factor_phi
+		result -= B
+
+	#
+	## third term C
+	if 'C' in component:
+		f = 2*Omega*np.sin(np.deg2rad(uz[lat]))
+
+		dudp = uz.differentiate(pres,edge_order=2)*factor_pres
+
+		kappa = Rd/cp
+		pp0   = (p0/uz[pres])**kappa
+		theta = Tz*pp0
+		theta_p = theta.differentiate(pres,edge_order=2)*factor_pres
+
+		C = uz[pres]*theta*dudp/(Tz*theta_p)
+		C = C.differentiate(pres,edge_order=2)*factor_pres
+		C = a0*f*f*C/Rd
+		result += C
+	#
+	return result
+
+
+##############################################################################################
 def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 	'''
 		Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
@@ -1515,6 +1603,66 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 	f2 = f*f
 	if N2const is None:
 		N2 = ComputeN2(pres,Tz,H,Rd,cp)
+	else:
+		N2 = N2const
+	H2 = H*H
+	F = f2/(4*N2*H2)
+
+	return a0*a0*(D-E-F)
+
+##############################################################################################
+def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None):
+	'''
+		Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
+		Stationary waves are assumed, ie c=0.
+
+		Setting k=0 means the only term depending on wave number is left out. This could be more efficient if n2(k) for different values of k is of interest.
+
+		meridonal PV gradient is
+		q_\phi = A - B + C, where
+				A = 2*Omega*cos\phi
+				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
+				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+		Total refractive index is
+		n2 = a^2*[D - E - F], where
+				D = q_\phi/(au)
+				E = (k/acos\phi)^2
+				F = (f/2NH)^2
+
+		Inputs are:
+			uz    - zonal mean zonal wind, xarray.DataArray
+			Tz    - zonal mean temperature, xarray.DataArray
+			k     - zonal wave number. [.]
+			lat   - name of latitude [degrees]
+			pres  - name of pressure [hPa]
+			N2const - if not None, assume N2 = const = N2const [1/s2]
+		Outputs are:
+			n2  - refractive index, dimension pres x lat [.]
+	'''
+	# some constants
+	Rd    = 287.04 # [J/kg.K = m2/s2.K]
+	cp    = 1004 # [J/kg.K = m2/s2.K]
+	a0    = 6.371e6 # [m]
+	Omega = 2*np.pi/(24*3600.) # [1/s]
+	H     = 7.e3 # [m]
+
+	#
+	## term D
+	dqdy = ComputeMeridionalPVGradXr(uz,Tz,lat,pres,Rd,cp,a0)
+	D = dqdy/(a0*uz)
+
+	#
+	## term E
+	coslat = np.cos(np.deg2rad(uz[lat]))
+	E = ( k/(a0*coslat) )**2
+
+	#
+	## term F
+	sinlat = np.sin(np.deg2rad(uz[lat]))
+	f = 2*Omega*sinlat
+	f2 = f*f
+	if N2const is None:
+		N2 = ComputeN2Xr(Tz,pres,H,Rd,cp)
 	else:
 		N2 = N2const
 	H2 = H*H
