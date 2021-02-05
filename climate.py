@@ -424,7 +424,7 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rol
 			lat	    - name of latitude in t
 			pres	    - name of pressure in t [hPa]
 			time	    - name of time field in t
-			ref	    - how to treat dTheta/dp: 
+			ref	    - how to treat dTheta/dp:
 				       - 'rolling-X' : centered rolling mean over X days
 				       - 'mean'	     : full time mean
 			p0	    - pressure basis to compute potential temperature [hPa]
@@ -452,7 +452,7 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rol
 	coslat = np.cos(np.deg2rad(t[lat]))
 	psi = 2*np.pi*a0/g*psi *coslat*100 #[kg/s]
 	psis= 2*np.pi*a0/g*psis*coslat*100 #[kg/s]
-	
+
 	return psi,psis
 
 
@@ -537,7 +537,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 
 def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91'):
 	""" Computes the vertical eddy components of the residual circulation,
-		bar(v'Theta'/Theta_p). 
+		bar(v'Theta'/Theta_p).
 		Output units are [v_bar] = [v], [t_bar] = [v*p]
 
 		INPUTS:
@@ -547,7 +547,7 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91
 			p0   - reference pressure for potential temperature
 			lon  - name of longitude
 			time - name of time field in t
-			ref  - how to treat dTheta/dp: 
+			ref  - how to treat dTheta/dp:
 			       - 'rolling-X' : centered rolling mean over X days
 			       - 'mean'	     : full time mean
 		OUPUTS:
@@ -878,7 +878,7 @@ def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time=
 			lon   - name of longitude coordinate
 			lat   - name of latitude coordinate
 			time  - name of time coordinate
-			ref   - how to treat dTheta/dp: 
+			ref   - how to treat dTheta/dp:
 				- 'rolling-X' : centered rolling mean over X days
 				- 'mean'      : full time mean
 			p0    - pressure basis to compute potential temperature [hPa]
@@ -890,7 +890,7 @@ def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time=
 			residual pressure velocity, same units as omega
 	"""
 	import numpy as np
-	
+
 	a0    = 6371000.
 
 	# spherical geometry
@@ -2099,7 +2099,7 @@ def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
 		return data.sortby(lon_name)
 	else:
 		return data
-	
+
 #######################################################
 def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	"""This function is deprecated. Please see StandardGrid().
@@ -2107,7 +2107,7 @@ def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
 	import warnings
 	warnings.warn('ERA2Model() is deprecated. Please use StandardGrid() instead.')
 	return StandardGrid(data,lon_name,lat_name)
-	
+
 #######################################################
 def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5.0):
 	"""
@@ -2337,15 +2337,25 @@ def Standardize(da,groupby='time.dayofyear'):
 	'''Standardize xr.DataArray on a frequency given by groupby.
 		This is from http://xarray.pydata.org/en/stable/examples/weather-data.html
 	'''
-	from xarray import apply_ufunc
+	# from xarray import apply_ufunc
 
 	time_name = groupby.split('.')[0]
 	climatology_mean = da.groupby(groupby).mean(time_name)
 	climatology_std = da.groupby(groupby).std(time_name)
-	stand_anomalies = apply_ufunc(
-	    lambda x, m, s: (x - m) / s,
-	    da.groupby(groupby),
-	    climatology_mean,
-	    climatology_std,
-	)
+	# stand_anomalies = apply_ufunc(
+	#     lambda x, m, s: (x - m) / s,
+	#     da.groupby(groupby),
+	#     climatology_mean,
+	#     climatology_std,
+	# )
+	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
 	return stand_anomalies
+
+#######################################################
+def LogPlot(ax):
+	'''Invert y-axis, make it log scale, change ytick formatting.
+	'''
+	import matplotlib
+	ax.set_yscale('log')
+	ax.invert_yaxis()
+	ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
