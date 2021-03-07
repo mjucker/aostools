@@ -1021,6 +1021,105 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
+def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='rolling-91',w=None,do_ubar=False):
+	""" Compute the EP-flux vectors and divergence terms.
+
+		The vectors are normalized to be plotted in cartesian (linear)
+		coordinates, i.e. do not include the geometric factor a*cos\phi.
+		Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
+		The divergence is in units of m/s/day, and therefore represents
+		the deceleration of the zonal wind. This is actually the quantity
+		1/(acos\phi)*div(F).
+
+	INPUTS:
+	  u    - zonal wind, xarray.DataArray [m/s]
+	  v    - meridional wind, xarray.DataArray [m/s]
+	  t    - temperature, xarray.DataArray [K]
+	  lon  - name of longitude
+	  lat  - name of latitude
+	  pres - name of pressure coordinate [hPa/s]
+	  time - name of time coordinate (used for ComputeVertEddy)
+	  ref  - method to use for dTheta/dp, used for ComputeVertEddy
+	  w    - pressure velocity, if not None, xarray.DataArray [hPa/s]
+	  do_ubar - compute shear and vorticity correction?
+	OUTPUTS (all xarray.DataArray):
+	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
+	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
+	  div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
+	  div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
+	"""
+	# some constants
+	Rd    = 287.04
+	cp    = 1004
+	kappa = Rd/cp
+	p0    = 1000
+	Omega = 2*np.pi/(24*3600.) # [1/s]
+	a0    = 6.371e6
+	# geometry
+	coslat = np.cos(np.deg2rad(u[lat]))
+	sinlat = np.sin(np.deg2rad(u[lat]))
+	R      = 1./(a0*coslat)
+	f      = 2*Omega*sinlat
+	pp0    = (p0/u[pres])**kappa
+	# shape
+	initial_order = u.dims
+	#
+	# absolute vorticity
+	if do_ubar:
+		ubar = u.mean(lon)
+		fhat = R*np.rad2deg((ubar*coslat)).differentiate(lat,edge_order=2)
+	else:
+		fhat = 0.
+	fhat = f - fhat # [1/s]
+	#
+	## compute thickness weighted heat flux [m.hPa/s]
+	vbar,vertEddy = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref) # vertEddy = bar(v'Th'/(dTh_bar/dp))
+	#
+	## get zonal anomalies
+	u = u - u.mean(lon)
+	v = v - v.mean(lon)
+	upvp = (u*v).mean(lon)
+	#
+	## compute the horizontal component
+	if do_ubar:
+		shear = ubar.differentiate(pres,edge_order=2) # [m/s.hPa]
+	else:
+		shear = 0.
+	ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
+	#
+	## compute vertical component of EP flux.
+	## at first, keep it in Cartesian coordinates, ie ep2_cart = f [v'theta'] / [theta]_p + ...
+	#
+	ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
+	if w is not None:
+		w = w - w.mean(lon) # w = w' [hPa/s]
+		w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
+		ep2_cart = ep2_cart - w # [m.hPa/s2]
+	#
+	#
+	# We now have to make sure we get the geometric terms right
+	# With our definition,
+	#  div1 = 1/(a.cosphi)*d/dphi[a*cosphi*ep1_cart*cosphi],
+	#    where a*cosphi comes from using cartesian, and cosphi from the derivative
+	# With some algebra, we get
+	#  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
+	div1 = coslat*(np.rad2deg(ep1_cart).differentiate(lat,edge_order=2)) \
+			- 2*sinlat*ep1_cart
+	# Now, we want acceleration, which is div(F)/a.cosphi [m/s2]
+	div1 = R*div1 # [m/s2]
+	#
+	# Similarly, we want acceleration = 1/a.coshpi*a.cosphi*d/dp[ep2_cart] [m/s2]
+	div2 = ep2_cart.differentiate(pres,edge_order=2) # [m/s2]
+	#
+	# convert to m/s/day
+	div1 = div1*86400
+	div2 = div2*86400
+	#
+	# make sure order is the same as input
+	new_order = [d for d in initial_order if d != lon]
+	return ep1_cart.transpose(*new_order),ep2_cart.transpose(*new_order),div1.transpose(*new_order),div2.transpose(*new_order)
+
+##############################################################################################
 def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lon0=0,method='uv',smooth=None,vw=None):
 	'''
 		Compute the horizontal streamfunction from u and v. Assumes horizontal non-divergence.
