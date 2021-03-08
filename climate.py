@@ -252,11 +252,7 @@ def ComputeSaturationMixingRatio(T, p, pDim):
 			qsat - saturation water mixing ratio [kg/kg]
 	"""
 	#some constants we need
-	Rd = 287.04
-	Rv = 461.5
-	ES0 = 610.78
-	HLV = 2.5e6
-	Tf = 273.16
+	from .constants import Rd,Rv,ESO,HLV,Tfreeze
 
 	# make sure we are operating along the pressure axis
 	T = AxRoll(T,pDim)
@@ -264,7 +260,7 @@ def ComputeSaturationMixingRatio(T, p, pDim):
 	# pressure is assumed in hPa: convert to Pa
 	p = p*100
 	# compute saturation pressure
-	esat = ES0*np.exp(HLV*(1./Tf - 1./T)/Rv)
+	esat = ES0*np.exp(HLV*(1./Tfreeze - 1./T)/Rv)
 	qsat = np.zeros_like(esat)
 	# finally, compute saturation mixing ratio from pressure
 	for k in range(len(p)):
@@ -303,7 +299,7 @@ def ComputeRelativeHumidity(inFile, pDim, outFile='none', temp='temp', sphum='sp
 	qsat = ComputeSaturationMixingRatio(t, p, pDim)
 
 	#write output file
-	if outFile is not 'none':
+	if outFile != 'none':
 		outFile = nc.Dataset(inFile[0:-3]+'_out.nc','w')
 		for dim in ncFile.dimensions:
 			outDim = outFile.createDimension(dim,len(ncFile.dimensions[dim]))
@@ -339,9 +335,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 	import os
 
 	# some constants
-	kappa = 2./7
-	a0    = 6371000
-	g     = 9.81
+	from .constants import kappa,a0,g
 
 	if isinstance(data,str):
 		# check if file exists
@@ -388,9 +382,9 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 	psis= 2*np.pi*a0/g*psis*np.cos(l[np.newaxis,np.newaxis,:]*np.pi/180.) #[kg/s]
 
 	## write outputfile
-	if outFileName is not 'none':
+	if outFileName != 'none':
 		print('Writing file  '+outFileName)
-		if outFileName is not 'same':
+		if outFileName != 'same':
 			outFile = nc.Dataset(outFileName,'w')
 			for dim in inFile.dimensions:
 				if dim in [time,pfull,lat]:
@@ -409,7 +403,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 		outVar[:] = psis
 		outFile.close()
 		print('Done writing file '+outFileName)
-		if outFileName is not 'same':
+		if outFileName != 'same':
 			inFile.close()
 	return psi,psis
 
@@ -435,9 +429,7 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rol
 	from scipy.integrate import cumtrapz
 	from numpy import cos,deg2rad
 	# some constants
-	kappa = 2./7
-	a0    = 6371000
-	g     = 9.81
+	from .constants import kappa,a0,g
 	#
 	## compute psi
 	v_bar,t_bar = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref) # t_bar = bar(v'Th'/(dTh_bar/dp))
@@ -507,7 +499,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	"""
 	#
 	# some constants
-	kappa = 2./7
+	from .constants import kappa
 	#
 	# pressure quantitites
 	pp0 = (p0/p[np.newaxis,:,np.newaxis,np.newaxis])**kappa
@@ -556,7 +548,7 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91
 	"""
 	#
 	# some constants
-	kappa = 2./7
+	from .constants import kappa
 	#
 	# pressure quantitites
 	pp0 = (p0/t[p])**kappa
@@ -942,12 +934,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	  div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
 	"""
 	# some constants
-	Rd    = 287.04
-	cp    = 1004
-	kappa = Rd/cp
-	p0    = 1000
-	Omega = 2*np.pi/(24*3600.) # [1/s]
-	a0    = 6.371e6
+	from .constants import Rd,cp,kappa,p0,Omega,a0
 	# geometry
 	pilat = lat*np.pi/180
 	dphi  = np.gradient(pilat)[np.newaxis,np.newaxis,:]
@@ -1049,12 +1036,7 @@ def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='ro
 	  div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
 	"""
 	# some constants
-	Rd    = 287.04
-	cp    = 1004
-	kappa = Rd/cp
-	p0    = 1000
-	Omega = 2*np.pi/(24*3600.) # [1/s]
-	a0    = 6.371e6
+	from .constants import Rd,cp,kappa,p0,Omega,a0
 	# geometry
 	coslat = np.cos(np.deg2rad(u[lat]))
 	sinlat = np.sin(np.deg2rad(u[lat]))
@@ -1663,8 +1645,8 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 	if not ('A' in component)+('B' in component)+('C' in component):
 		raise ValueError('component has to contain A,B and/or C, but got '+component)
 	# some constants
-	Omega = 2*np.pi/(86400.) # [1/s]
-	p0    = 1e5 #[Pa]
+	from .constants import Omega
+	from .constants import p0_Pa as p0
 
 	## make sure we have the dimesions as expected
 	if uz.shape != Tz.shape:
@@ -1749,8 +1731,7 @@ def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=100
 	if not ('A' in component)+('B' in component)+('C' in component):
 		raise ValueError('component has to contain A,B and/or C, but got '+component)
 	# some constants
-	Omega = 2*np.pi/(86400.) # [1/s]
-	p0    = 1e3 #[hPa]
+	from .constants import Omega,p0
 	coslat = np.cos(np.deg2rad(uz[lat]))
 	factor_phi = 180/np.pi
 	factor_pres= 0.01
@@ -1820,10 +1801,7 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 			n2  - refractive index, dimension pres x lat [.]
 	'''
 	# some constants
-	Rd    = 287.04 # [J/kg.K = m2/s2.K]
-	cp    = 1004 # [J/kg.K = m2/s2.K]
-	a0    = 6.371e6 # [m]
-	Omega = 2*np.pi/(24*3600.) # [1/s]
+	from .constants import Rd,cp,a0,Omega
 	H     = 7.e3 # [m]
 
 	latpi = np.deg2rad(lat)
@@ -1881,10 +1859,7 @@ def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None):
 			n2  - refractive index, dimension pres x lat [.]
 	'''
 	# some constants
-	Rd    = 287.04 # [J/kg.K = m2/s2.K]
-	cp    = 1004 # [J/kg.K = m2/s2.K]
-	a0    = 6.371e6 # [m]
-	Omega = 2*np.pi/(24*3600.) # [1/s]
+	from .constants import Rd,cp,a0,Omega
 	H     = 7.e3 # [m]
 
 	#
@@ -2014,8 +1989,8 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 		out   - converted from data
 		"""
 	# constants
-	a0    = 6.371e6
-	ps    = 1e3
+	from .constants import a0,p0
+	ps    = p0
 	H     = 7e3
 	# geometric quantitites
 	if 'lat' in mode or 'lon' in mode:
@@ -2025,9 +2000,9 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	   gemfac  = rad2deg/a0
 	#
 	ndims = len(np.shape(data))
-	if mode is 'm2lat':
+	if mode == 'm2lat':
 		out = data*gemfac
-	elif mode is 'lat2m':
+	elif mode == 'lat2m':
 		out = data/gemfac
 	elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
 		if ndims > 1:
@@ -2037,7 +2012,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	#	out = np.zeros_like(tmp)
 	else:
 		raise ValueError("mode not recognized")
-	if mode is 'm2lon':
+	if mode == 'm2lon':
 		if ndims > 1:
 			for l in range(out.shape[0]):
 				out[l,:] = tmp[l,:]*cosm1
@@ -2045,14 +2020,14 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 			out = tmp*cosm1
 		out = out*gemfac
 		out = AxRoll(out,axis,invert=True)
-	elif mode is 'lon2m':
+	elif mode == 'lon2m':
 		if ndims > 1:
 			for l in range(out.shape[0]):
 				out[l,:] = tmp[l,:]*coslat
 		else:
 			out = tmp*coslat
 		out = out/gemfac
-	elif mode is 'm2hPa':
+	elif mode == 'm2hPa':
 		if ndims > 1:
 			for p in range(out.shape[0]):
 				out[p,:] = -coord[p]*tmp[p,:]
@@ -2060,7 +2035,7 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 			out = -coord*tmp
 		out = out/H
 		out = AxRoll(out,axis,invert=True)
-	elif mode is 'hPa2m':
+	elif mode == 'hPa2m':
 		if ndims > 1:
 			for p in range(out.shape[0]):
 				out[p,:] = -coord[p]/tmp[p,:]
