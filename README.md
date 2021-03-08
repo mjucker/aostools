@@ -11,3 +11,8 @@ This readme will be extended in the near future. Until then, each function has d
 ```
 pip install aostools
 ```
+If you want to use map projections (with the `Projection()` function), you'd also want to install [Cartopy](https://scitools.org.uk/cartopy/docs/latest/). The best way to do this is via `conda`
+```
+conda install cartopy
+```
+
