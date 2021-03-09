@@ -20,7 +20,7 @@ conda install cartopy
 
 While my goal is to make all functions work with [xarray](xarray.pydata.org), this is still work in progress. For now, some of the functions exist for both numpy and xarray data, and if you have xarray Datasets or DataArrays, look for functions named `SomeFunctionNameXr()`, whereas the numpy equivalend would be `SomeFunctionName()`. For instance, the Eliassen-Palm flux calculations are done in `ComputeEPfluxDiv()` for numpy arrays and `ComputeEPfluxDivXr()` for xarray.DataArrays.
 
-## Reference
+## How to cite
 
 If you use any of the `aostools` functionality for your published work, please include a citation using either the generic DOI for all versions, [10.5281/zenodo.597598](https://doi.org/10.5281/zenodo.597598), or the DOI linking to the specific release, which you can find by visiting [the same link](https://doi.org/10.5281/zenodo.597598).
 
