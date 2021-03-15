@@ -2268,7 +2268,12 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 			time: name of time dimension.
 			avg:  size of rolling window for rolling time average.
 			nino: which Nino index to compute. Choices are
-					'1+2','3','4','3.4','oni','tni'
+					'1+2','3','4','3.4','oni','tni','modiki'
+					'oni' is the same as '3.4', as they only 
+					   distinguish themselves via the rolling 
+					   average period (3 months for oni, 
+					   5 months for 3.4)
+                                        'modiki' is the same as 'tni'
 
 		OUTPUTS:
 			sst: spatially averaged over respective Nino index domain
@@ -2282,6 +2287,8 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 		'oni' : {lon:slice(190,240),lat:slice(-5,5)},
 	}
 	possible_ninos = list(ninos.keys())+['tni']
+	if nino == 'modiki':
+		nino = 'tni'
 	if nino not in possible_ninos:
 		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(nino,', '.join(possible_ninos)))
 	lon_name = None
@@ -2299,13 +2306,13 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 		sstc = ssta.groupby('.'.join([time,'month'])).mean(dim=time)
 		ssta = ssta.groupby('.'.join([time,'month'])) - sstc
 		if avg is not None:
-			ssta = ssta.rolling({time:avg}).mean()
+			ssta = ssta.rolling({time:avg},min_periods=1).mean()
 		return ssta/ssta.std(dim=time)
 
 	if nino == 'tni':
 		n12 = NinoAvg(sst,'1+2',time,None)
 		n4  = NinoAvg(sst,'4',time,None)
-		tni = (n12-n4).rolling({time:avg}).mean()
+		tni = (n12-n4).rolling({time:avg},min_periods=1).mean()
 		return tni/tni.std(dim=time)
 	else:
 		return NinoAvg(sst,nino,time,avg)
