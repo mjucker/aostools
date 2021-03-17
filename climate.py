@@ -408,7 +408,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 	return psi,psis
 
 ##############################################################################################
-def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='rolling-91', p0=1e3):
+def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='mean', p0=1e3):
 	"""Computes the residual stream function \Psi* (as a function of time).
 
 		INPUTS:
@@ -527,7 +527,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	#
 	return v_bar,t_bar
 
-def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='rolling-91'):
+def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
 	""" Computes the vertical eddy components of the residual circulation,
 		bar(v'Theta'/Theta_p).
 		Output units are [v_bar] = [v], [t_bar] = [v*p]
@@ -860,7 +860,7 @@ def ComputeWstar(data, slice='all', omega='omega', temp='temp', vcomp='vcomp', p
 		return w_bar + R*vt_bar
 
 ##############################################################################################
-def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time='time', ref='rolling-91', p0=1e3, is_Pa='omega'):
+def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time='time', ref='mean', p0=1e3, is_Pa='omega'):
 	"""Computes the residual upwelling w*. omega, temp, vcomp are xarray.DataArrays.
 
 		Output units are the same as the units of omega, and the pressure coordinate is expected in hPa, latitude in degrees.
@@ -1011,7 +1011,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='rolling-91',w=None,do_ubar=False):
+def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='mean',w=None,do_ubar=False):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
@@ -2417,21 +2417,37 @@ def RollingMeanStd(x,mean_std,r=31,dim='time'):
 	return xc
 
 #######################################################
-def Standardize(da,groupby='time.dayofyear'):
+def Anomaly(da,groupby='time.dayofyear'):
+        '''Compute anomaly of xr.DataArray on frequency given by groupby.
+
+        INPUTS:
+           da     : xarray.DataArray or xarray.Dataset from which to compute anomalies.
+           groupby: defines frequency for anomalies.
+        OUTPUTS:
+           da     : input array as anomalies with respect to `groupby`
+        '''
+        return da.groupby(groupby) - da.groupby(groupby).mean()
+
+#######################################################
+def Standardize(da,groupby='time.dayofyear',std=None):
 	'''Standardize xr.DataArray on a frequency given by groupby.
 		This is from http://xarray.pydata.org/en/stable/examples/weather-data.html
+
+          INPUTS:
+            da     : xarray.DataArray or xarray.Dataset to standardize
+            groupby: frequency/basis on which to compute anomalies and standardize.
+            std    : use this standard deviation to standardize instead of da's standard deviation
+          OUTPUTS:
+            da     : standarized da
 	'''
 	# from xarray import apply_ufunc
 
 	time_name = groupby.split('.')[0]
 	climatology_mean = da.groupby(groupby).mean(time_name)
-	climatology_std = da.groupby(groupby).std(time_name)
-	# stand_anomalies = apply_ufunc(
-	#     lambda x, m, s: (x - m) / s,
-	#     da.groupby(groupby),
-	#     climatology_mean,
-	#     climatology_std,
-	# )
+	if std is None:
+		climatology_std = da.groupby(groupby).std(time_name)
+	else:
+		climatology_std = std
 	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
 	return stand_anomalies
 
