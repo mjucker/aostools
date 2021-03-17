@@ -599,7 +599,10 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 	if len(shpe) > 2:
 		X = X.reshape([shpe[0],np.prod(shpe[1:])])
 		if eof_in is not None:
-			eof_in = eof_in.reshape([np.prod(eof_in.shape[:-1]),eof_in.shape[-1]])
+			if len(eof_in.shape) > 2:
+				eof_in = eof_in.reshape([np.prod(eof_in.shape[:-1]),eof_in.shape[-1]])
+			else:
+				eof_in = eof_in.reshape([np.prod(eof_in.shape),1])
 	# take out the time mean or trend
 	X = sg.detrend(X.transpose(),type=detrend)
 	if eof_in is not None:
