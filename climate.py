@@ -2459,3 +2459,21 @@ def LogPlot(ax):
 	ax.set_yscale('log')
 	ax.invert_yaxis()
 	ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+#######################################################
+def AddColorbar(fig,axs,cf,shrink=0.95):
+        '''Add a common colorbar to a FacetPlot.
+            Note that this assumes all panels have been plotted with the same 
+            color range and levels.
+
+          INPUTS:
+             fig   : figure object containing facet plot.
+             axs   : list of all axes in the facet plot.
+             cf    : image object which contains the values. 
+                    e.g. cf = plt.contourf(...)
+             shrink: factor to make colorbar smaller.
+          OUTPUTS:
+             cbar: colorbar object.
+        '''
+        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=0.95)
+        
