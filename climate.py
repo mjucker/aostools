@@ -2450,6 +2450,35 @@ def Standardize(da,groupby='time.dayofyear',std=None):
 		climatology_std = std
 	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
 	return stand_anomalies
+#######################################################
+def KStest(x,y,dim):
+	'''Compute Kolmogorov-Smirnov test for significance between
+	   two xr.DataArrays. Testing will be done along dimension with name `dim`
+	   and the output p-value will have all dimensions except `dim`.
+	   
+	   INPUTS:
+	      x	 : xr.DataArray for testing.
+	      y	 : xr.DataArray for testing against.
+	      dim: dimension name along which to perform the test.
+	   OUTPUTS:
+	      pvalx: xr.DataArray containing the p-values.
+		     Same dimensionas x,y except `dim`.
+	'''
+	from xarray import DataArray
+	from scipy.stats import ks_2samp
+	from numpy import zeros_like
+	dims = []
+	for d in x.coords:
+		if d != dim:
+			dims.append(d)
+	sx = x.stack(space=dims)
+	sy = y.stack(space=dims)
+	pval = zeros_like(sx.space)
+	nspace = len(pval)
+	for i in range(nspace):
+		_,pval[i] = ks_2samp(sx.isel(space=i),sy.isel(space=i))
+	pvalx = DataArray(pval,coords=[sx.space],name='pval').unstack('space')
+	return pvalx
 
 #######################################################
 def LogPlot(ax):
