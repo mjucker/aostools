@@ -445,6 +445,10 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='mea
 	psi = 2*np.pi*a0/g*psi *coslat*100 #[kg/s]
 	psis= 2*np.pi*a0/g*psis*coslat*100 #[kg/s]
 
+	## give the DataArrays their names
+	psi.name = 'psi'
+	psis.name= 'psis'
+
 	return psi,psis
 
 
@@ -1102,6 +1106,11 @@ def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='me
 	#
 	# make sure order is the same as input
 	new_order = [d for d in initial_order if d != lon]
+	# give the DataArrays their names
+	ep1_cart.name = 'ep1'
+	ep2_cart.name = 'ep2'
+	div1.name = 'div1'
+	div2.name = 'div2'
 	return ep1_cart.transpose(*new_order),ep2_cart.transpose(*new_order),div1.transpose(*new_order),div2.transpose(*new_order)
 
 ##############################################################################################
