@@ -445,6 +445,10 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='mea
 	psi = 2*np.pi*a0/g*psi *coslat*100 #[kg/s]
 	psis= 2*np.pi*a0/g*psis*coslat*100 #[kg/s]
 
+	## give the DataArrays their names
+	psi.name = 'psi'
+	psis.name= 'psis'
+
 	return psi,psis
 
 
@@ -1102,6 +1106,11 @@ def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='me
 	#
 	# make sure order is the same as input
 	new_order = [d for d in initial_order if d != lon]
+	# give the DataArrays their names
+	ep1_cart.name = 'ep1'
+	ep2_cart.name = 'ep2'
+	div1.name = 'div1'
+	div2.name = 'div2'
 	return ep1_cart.transpose(*new_order),ep2_cart.transpose(*new_order),div1.transpose(*new_order),div2.transpose(*new_order)
 
 ##############################################################################################
@@ -2456,6 +2465,35 @@ def Standardize(da,groupby='time.dayofyear',std=None):
 		climatology_std = std
 	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
 	return stand_anomalies
+#######################################################
+def KStest(x,y,dim):
+	'''Compute Kolmogorov-Smirnov test for significance between
+	   two xr.DataArrays. Testing will be done along dimension with name `dim`
+	   and the output p-value will have all dimensions except `dim`.
+	   
+	   INPUTS:
+	      x	 : xr.DataArray for testing.
+	      y	 : xr.DataArray for testing against.
+	      dim: dimension name along which to perform the test.
+	   OUTPUTS:
+	      pvalx: xr.DataArray containing the p-values.
+		     Same dimensionas x,y except `dim`.
+	'''
+	from xarray import DataArray
+	from scipy.stats import ks_2samp
+	from numpy import zeros_like
+	dims = []
+	for d in x.coords:
+		if d != dim:
+			dims.append(d)
+	sx = x.stack(space=dims)
+	sy = y.stack(space=dims)
+	pval = zeros_like(sx.space)
+	nspace = len(pval)
+	for i in range(nspace):
+		_,pval[i] = ks_2samp(sx.isel(space=i),sy.isel(space=i))
+	pvalx = DataArray(pval,coords=[sx.space],name='pval').unstack('space')
+	return pvalx
 
 #######################################################
 def LogPlot(ax):
