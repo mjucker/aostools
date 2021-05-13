@@ -1469,6 +1469,8 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		newax	: plot on second y-axis. [False]
 		pivot	: keyword argument for quiver() ['tail']
 		scale	: keyword argument for quiver(). Smaller is longer [None]
+				  besides fixing the length, it is also usefull when calling this function inside a
+				   script without display as the only way to have a quiverkey on the plot.
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
@@ -1529,9 +1531,13 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		Q = ax.quiver(x,y,Fphi*dx,Fp*dy,**quivArgs)
 	except:
 		Q = ax.quiver(x,y,dx*Fphi.transpose(),dy*Fp.transpose(),**quivArgs)
-	fig.canvas.draw() # need to update the plot to get the Q.scale
-	U = Q.scale
-	ax.quiverkey(Q,0.9,1.02,U/width,label=r'{0:.1e}$\,m^3$'.format(U),labelpos='E',coordinates='axes')
+	if scale is None:
+		fig.canvas.draw() # need to update the plot to get the Q.scale
+		U = Q.scale
+	else:
+		U = scale
+	if U is not None: # when running inside a script, the figure might not exist and therefore U is None
+		ax.quiverkey(Q,0.9,1.02,U/width,label=r'{0:.1e}$\,m^3$'.format(U),labelpos='E',coordinates='axes')
 	if invert_y:
 		ax.invert_yaxis()
 	if xlim is not None:
@@ -2355,9 +2361,9 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 			avg:  size of rolling window for rolling time average.
 			nino: which Nino index to compute. Choices are
 					'1+2','3','4','3.4','oni','tni','modiki'
-					'oni' is the same as '3.4', as they only 
-					   distinguish themselves via the rolling 
-					   average period (3 months for oni, 
+					'oni' is the same as '3.4', as they only
+					   distinguish themselves via the rolling
+					   average period (3 months for oni,
 					   5 months for 3.4)
                                         'modiki' is the same as 'tni'
 
@@ -2548,17 +2554,16 @@ def LogPlot(ax):
 #######################################################
 def AddColorbar(fig,axs,cf,shrink=0.95):
         '''Add a common colorbar to a FacetPlot.
-            Note that this assumes all panels have been plotted with the same 
+            Note that this assumes all panels have been plotted with the same
             color range and levels.
 
           INPUTS:
              fig   : figure object containing facet plot.
              axs   : list of all axes in the facet plot.
-             cf    : image object which contains the values. 
+             cf    : image object which contains the values.
                     e.g. cf = plt.contourf(...)
              shrink: factor to make colorbar smaller.
           OUTPUTS:
              cbar: colorbar object.
         '''
         return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=0.95)
-        
