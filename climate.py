@@ -1848,7 +1848,7 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 	return a0*a0*(D-E-F)
 
 ##############################################################################################
-def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None):
+def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None,ulim=None):
 	'''
 		Refractive index as in Simpson et al (2009) doi 10.1175/2008JAS2758.1 and also Matsuno (1970) doi 10.1175/1520-0469(1970)027<0871:VPOSPW>2.0.CO;2
 		Stationary waves are assumed, ie c=0.
@@ -1873,6 +1873,7 @@ def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None):
 			lat   - name of latitude [degrees]
 			pres  - name of pressure [hPa]
 			N2const - if not None, assume N2 = const = N2const [1/s2]
+			ulim  - only compute n2 where |u| > ulim to avoid divisions by zero.
 		Outputs are:
 			n2  - refractive index, dimension pres x lat [.]
 	'''
@@ -1883,7 +1884,11 @@ def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None):
 	#
 	## term D
 	dqdy = ComputeMeridionalPVGradXr(uz,Tz,lat,pres,Rd,cp,a0)
-	D = dqdy/(a0*uz)
+	if ulim is not None:
+		utmp = uz.where(np.abs(uz)>ulim)
+	else:
+		utmp = uz
+	D = dqdy/(a0*utmp)
 
 	#
 	## term E
@@ -2470,7 +2475,7 @@ def KStest(x,y,dim):
 	'''Compute Kolmogorov-Smirnov test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
-	   
+
 	   INPUTS:
 	      x	 : xr.DataArray for testing.
 	      y	 : xr.DataArray for testing against.
