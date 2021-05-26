@@ -2471,8 +2471,23 @@ def Standardize(da,groupby='time.dayofyear',std=None):
 	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
 	return stand_anomalies
 #######################################################
-def KStest(x,y,dim):
-	'''Compute Kolmogorov-Smirnov test for significance between
+def StackArray(x,dim):
+	'''return stacked array with only one dimension left
+
+	INPUTS:
+	   x  : xarray.DataArray or Dataset to be stacked
+	   dim: sole dimension to remain after stacking
+	OUTPUTS:
+	   stacked: same as x, but stacked
+	'''
+	dims = []
+	for d in x.coords:
+		if d != dim:
+			dims.append(d)
+	return x.stack(stacked=dims)
+
+def StatTest(x,y,dim,test='KS'):
+	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
 
@@ -2480,26 +2495,58 @@ def KStest(x,y,dim):
 	      x	 : xr.DataArray for testing.
 	      y	 : xr.DataArray for testing against.
 	      dim: dimension name along which to perform the test.
+	      test:which test to use:
+		    'KS' -> Kolmogorov-Smirnov
+		    'MW' -> Mann-Whitney
+		    'WC' -> Wilcoxon
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimensionas x,y except `dim`.
 	'''
 	from xarray import DataArray
-	from scipy.stats import ks_2samp
-	from numpy import zeros_like
-	dims = []
-	for d in x.coords:
-		if d != dim:
-			dims.append(d)
-	sx = x.stack(space=dims)
-	sy = y.stack(space=dims)
-	pval = zeros_like(sx.space)
+	from scipy import stats
+	sx = StackArray(x,dim)
+	sy = StackArray(y,dim)
+	pval = np.zeros_like(sx.stacked)
 	nspace = len(pval)
 	for i in range(nspace):
-		_,pval[i] = ks_2samp(sx.isel(space=i),sy.isel(space=i))
-	pvalx = DataArray(pval,coords=[sx.space],name='pval').unstack('space')
+		if np.all(sx.isel(stacked=i) == sy.isel(stacked=i)):
+			pval[i] = 1.0
+		else:
+			if test == 'KS':
+				_,pval[i] = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
+			elif test == 'MW':
+				_,pval[i] = stats.mannwhitneyu(sx.isel(stacked=i),sy.isel(stacked=i),alternative='two-sided')
+			elif test == 'WC':
+				_,pval[i] = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
+	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
 	return pvalx
 
+#######################################################
+def CheckSign(ens,dim,perc):
+	'''Check significance using agreement on sign only.
+	    This tests ensemble `ens` across dimension `dim` and counts 
+	    how many members have the same sign. If more than `perc`% of
+	    members have the same sign, return is True, else False.
+
+	INPUTS:
+	  ens:	the ensemble to test. xr.DataArray or xr.Dataset
+	  dim:	dimension to test across. this is normally the ensemble members
+	  perc: percentile of significance. require `dim`% of members to have same sign.
+
+	OUTPUTS:
+	  filtr: mask of booleans. True means at least `perc`% of members have same sign
+	'''
+	from xarray import where as xwhere
+	from xarray import DataArray
+	nmembs = len(ens[dim])
+	percentile = 0.01*perc*nmembs
+	sign = DataArray(np.sign(ens),coords=ens.coords)
+	pos = xwhere(sign > 0,1,0).sum(dim)
+	neg = xwhere(sign < 0,1,0).sum(dim)
+	pfiltr = pos > percentile # positive sign agrees
+	nfiltr = neg > percentile # negative sign agrees
+	return pfiltr+nfiltr
 #######################################################
 def LogPlot(ax):
 	'''Invert y-axis, make it log scale, change ytick formatting.
