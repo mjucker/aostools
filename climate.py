@@ -2525,7 +2525,7 @@ def StatTest(x,y,dim,test='KS'):
 #######################################################
 def CheckSign(ens,dim,perc):
 	'''Check significance using agreement on sign only.
-	    This tests ensemble `ens` across dimension `dim` and counts 
+	    This tests ensemble `ens` across dimension `dim` and counts
 	    how many members have the same sign. If more than `perc`% of
 	    members have the same sign, return is True, else False.
 
@@ -2548,13 +2548,16 @@ def CheckSign(ens,dim,perc):
 	nfiltr = neg > percentile # negative sign agrees
 	return pfiltr+nfiltr
 #######################################################
-def LogPlot(ax):
+def LogPlot(ax,log=True,invert=True,format=True):
 	'''Invert y-axis, make it log scale, change ytick formatting.
 	'''
 	import matplotlib
-	ax.set_yscale('log')
-	ax.invert_yaxis()
-	ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+	if log:
+		ax.set_yscale('log')
+	if invert:
+		ax.invert_yaxis()
+	if format:
+		ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
 #######################################################
 def AddColorbar(fig,axs,cf,shrink=0.95):
