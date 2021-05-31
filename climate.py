@@ -2548,11 +2548,17 @@ def CheckSign(ens,dim,perc):
 	nfiltr = neg > percentile # negative sign agrees
 	return pfiltr+nfiltr
 #######################################################
-def LogPlot(ax,log=True,invert=True,format=True):
+def LogPlot(ax,log=True,invert=True,format=True,ylim=None):
 	'''Invert y-axis, make it log scale, change ytick formatting.
 	'''
 	import matplotlib
+	if ylim is not None:
+		ax.set_ylim(*ylim)
 	if log:
+		if min(ax.get_ylim()) < 0:
+			print('Y-axis extends into negative values. Need ylim input to make it log scale.')
+			import sys
+			sys.exit()
 		ax.set_yscale('log')
 	if invert:
 		ax.invert_yaxis()
