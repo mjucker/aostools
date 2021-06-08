@@ -1582,6 +1582,42 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	return integ
 
 ##############################################################################################
+def GlobalAvgXr(ds,lats=[-90,90],lat=None,cosp=1):
+	"""Compute cosine weighted meridional average.
+
+	INPUTS:
+	  ds    - xarray.Dataset or xarray.DataArray to average.
+	  lats  - latitude range to average over.
+	  lat   - name of latitude dimension - guess if None.
+	  cosp  - power of cosine weighting
+	OUTPUTS:
+	  averaged data, size ds minus latitude
+	"""
+	guesses = ['lat','latitude']
+	# try to find latitude dimension
+	if lat is None:
+		coordsList = list(ds.coords)
+		checks = [l.lower() in guesses for l in coordsList]
+		if np.any(checks):
+			lat = coordsList[checks.index(True)]
+		else:
+			raise Error("couldn't find latitude dimension. Please set `lat` input.")
+	# make sure order of latitude is correct
+	revert = False
+	if ds[lat][0] < ds[lat][-1]:
+		if lats[0] > lats[1]:
+			revert = True
+	else:
+		if lats[0] < lats[1]:
+			revert = True
+	if revert:
+		lats = [lats[1],lats[0]]
+	dt = ds.sel({lat:slice(*lats)})
+	coslat = np.cos(np.deg2rad(dt[lat]))**cosp
+	dt.attrs['average'] = 'cos^{2} weighted meridional average from {0} to {1}'.format(lats[0],lats[1],cosp)
+	return dt.weighted(coslat).mean(lat,keep_attrs=True)
+
+##############################################################################################
 def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
 	''' Compute the Brunt-Vaisala frequency from zonal mean temperature
 		 N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
