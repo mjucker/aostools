@@ -2210,7 +2210,7 @@ def Convert2Days(time,units,calendar):
 	return t.date2num(date)
 
 #######################################################
-def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
+def StandardGrid(data,lon_name='infer',lat_name='infer'):
 	"""
 		Make sure longitude is in [0,360] and latitude sorted
 		 from lowest to highest.
@@ -2218,12 +2218,22 @@ def StandardGrid(data,lon_name='longitude',lat_name='latitude'):
 
 		INPUTS:
 			data:	   xarray.DataArray or xarray.Dataset to regrid
-			lon_name:  name of longitude dimension. Set to None if nothing should be done.
-			lat_name:  name of latitude dimension. Set to None if nothing should be done.
+			lon_name:  name of longitude dimension.
+						If None: nothing should be done.
+						If 'infer': try to find name of longitude
+			lat_name:  name of latitude dimension.
+			 			If None: nothing should be done.
+						If 'infer': try to find name of latitude
 		OUTPUTS:
 			data:	  xarray.DataArray with latitude from lowest to highest and
 					   longitude between 0 and 360 degrees.
 	"""
+	if lon_name == 'infer' or lat_name == 'infer':
+		dim_names = FindCoordNames(data)
+		if lon_name == 'infer':
+			lon_name = dim_names['lon']
+		if lat_name == 'infer':
+			lat_name = dim_names['lat']
 	if lat_name is not None and lat_name in data.coords:
 		if data[lat_name][0] > data[lat_name][-1]:
 			data = data.sortby(lat_name)
@@ -2617,3 +2627,33 @@ def AddColorbar(fig,axs,cf,shrink=0.95):
              cbar: colorbar object.
         '''
         return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=0.95)
+#######################################################
+def FindCoordNames(ds):
+	'''Find the actual dimension names in xr.Dataset or xr.DataArray
+	    which correspond to longitude, latitude, pressure
+
+	   INPUTS:
+	   	  ds:        xarray.Dataset or DataArray
+	   OUTPUTS:
+	      dim_names: Dictionary of dimension names.
+		  		      Longitude = ds[dim_names['lon']]
+					  Latitude  = ds[dim_names['lat']]
+					  Pressure  = ds[dim_names['pres']]
+	'''
+	odims = list(ds.dims)
+	ldims = [d.lower() for d in ds.dims]
+	dim_names = {}
+	# check for longitude
+	for lon in ['longitude','lon']:
+		if lon in ldims:
+			indx = ldims.index(lon)
+			dim_names['lon'] = odims[indx]
+	for lat in ['latitude','lat']:
+		if lat in ldims:
+			indx = ldims.index(lat)
+			dim_names['lat'] = odims[indx]
+	for plev in ['level','pres','pfull','lev']:
+		if plev in ldims:
+			indx = ldims.index(plev)
+			dim_names['pres'] = odims[indx]
+	return dim_names
