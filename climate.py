@@ -2537,7 +2537,26 @@ def StackArray(x,dim):
 			dims.append(d)
 	return x.stack(stacked=dims)
 
-def StatTest(x,y,dim,test='KS'):
+def ComputeStat(i,sx,y,sy,test):
+	'''This is part of StatTest, but for parmap.map to work, it has to be an
+		independent function.
+	'''
+	from xarray import DataArray
+	from scipy import stats
+	if isinstance(y,DataArray) and (np.all(sx.isel(stacked=i) == sy.isel(stacked=i))):
+		ploc = 0.0
+	else:
+		if test == 'KS':
+			_,ploc = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
+		elif test == 'MW':
+			_,ploc = stats.mannwhitneyu(sx.isel(stacked=i),sy.isel(stacked=i),alternative='two-sided')
+		elif test == 'WC':
+			_,ploc = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
+		elif test == 'T':
+			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
+	return ploc
+
+def StatTest(x,y,dim,test='KS',parallel=False):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
@@ -2550,26 +2569,27 @@ def StatTest(x,y,dim,test='KS'):
 		    'KS' -> Kolmogorov-Smirnov
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
+			'T'  -> T-test 1 sample with y=mean
+		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimensionas x,y except `dim`.
 	'''
 	from xarray import DataArray
-	from scipy import stats
+	if parallel:
+		import parmap
 	sx = StackArray(x,dim)
-	sy = StackArray(y,dim)
-	pval = np.zeros_like(sx.stacked)
-	nspace = len(pval)
-	for i in range(nspace):
-		if np.all(sx.isel(stacked=i) == sy.isel(stacked=i)):
-			pval[i] = 1.0
-		else:
-			if test == 'KS':
-				_,pval[i] = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
-			elif test == 'MW':
-				_,pval[i] = stats.mannwhitneyu(sx.isel(stacked=i),sy.isel(stacked=i),alternative='two-sided')
-			elif test == 'WC':
-				_,pval[i] = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
+	if isinstance(y,DataArray):
+		sy = StackArray(y,dim)
+	else:
+		sy = None
+	nspace = len(sx.stacked)
+	if parallel:
+		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test)
+	else:
+		pval = np.zeros_like(sx.stacked)
+		for i in range(nspace):
+			pval[i] = ComputeStat(isx,y,sy,test)
 	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
 	return pvalx
 
