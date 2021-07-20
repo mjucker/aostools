@@ -2210,7 +2210,7 @@ def Convert2Days(time,units,calendar):
 	return t.date2num(date)
 
 #######################################################
-def StandardGrid(data,lon_name='infer',lat_name='infer'):
+def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
 	"""
 		Make sure longitude is in [0,360] and latitude sorted
 		 from lowest to highest.
@@ -2224,6 +2224,10 @@ def StandardGrid(data,lon_name='infer',lat_name='infer'):
 			lat_name:  name of latitude dimension.
 			 			If None: nothing should be done.
 						If 'infer': try to find name of latitude
+			rename:    Rename dims to standard? If True, output names will be:
+				 		longitude = 'lon'
+						latitude  = 'lat'
+						pressure  = 'press'
 		OUTPUTS:
 			data:	  xarray.DataArray with latitude from lowest to highest and
 					   longitude between 0 and 360 degrees.
@@ -2239,9 +2243,10 @@ def StandardGrid(data,lon_name='infer',lat_name='infer'):
 			data = data.sortby(lat_name)
 	if lon_name is not None and lon_name in data.coords and data[lon_name].min() < 0:
 		data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
-		return data.sortby(lon_name)
-	else:
-		return data
+		data = data.sortby(lon_name)
+	if rename:
+		data = data.rename(dict(map(reversed, dim_names.items())))
+	return data
 
 #######################################################
 def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
@@ -2644,11 +2649,11 @@ def FindCoordNames(ds):
 	ldims = [d.lower() for d in ds.dims]
 	dim_names = {}
 	# check for longitude
-	for lon in ['longitude','lon']:
+	for lon in ['longitude','lon','xt_ocean']:
 		if lon in ldims:
 			indx = ldims.index(lon)
 			dim_names['lon'] = odims[indx]
-	for lat in ['latitude','lat']:
+	for lat in ['latitude','lat','yt_ocean']:
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
