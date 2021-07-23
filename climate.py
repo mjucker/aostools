@@ -1015,7 +1015,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='mean',w=None,do_ubar=False):
+def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',ref='mean',w=None,do_ubar=False):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
@@ -1044,14 +1044,21 @@ def ComputeEPfluxDivXr(u,v,t,lon='lon',lat='lat',pres='pres',time='time',ref='me
 	"""
 	# some constants
 	from .constants import Rd,cp,kappa,p0,Omega,a0
+	# shape
+	dim_names = FindCoordNames(u)
+	if lon == 'infer':
+		lon = dim_names['lon']
+	if lat == 'infer':
+		lat = dim_names['lat']
+	if pres == 'infer':
+		pres = dim_names['pres']
+	initial_order = u.dims
 	# geometry
 	coslat = np.cos(np.deg2rad(u[lat]))
 	sinlat = np.sin(np.deg2rad(u[lat]))
 	R      = 1./(a0*coslat)
 	f      = 2*Omega*sinlat
 	pp0    = (p0/u[pres])**kappa
-	# shape
-	initial_order = u.dims
 	#
 	# absolute vorticity
 	if do_ubar:
@@ -1269,7 +1276,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 		return psi_out
 
 ##############################################################################################
-def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',pres='level',tref=None,qg=False,use_windspharm=False,kwpsi={}):
+def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer',lon='infer',pres='infer',tref=None,qg=False,use_windspharm=False,kwpsi={}):
 	'''
 		Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
 		Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
@@ -1281,8 +1288,8 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
 		phiref_or_v: reference geopotential [m2/s2] (qg = True)
 						OR (full) meridional wind [m/s] (qg = False)
-		uref	   : reference zonal wind [m/s]
-		vref	   : reference meridional wind [m/s]
+		uref	   : reference zonal wind [m/s] - only needed if (qg = False)
+		vref	   : reference meridional wind [m/s] - only needed if (qg = False)
 		lat	   : name of latitude in DataArrays
 		lon	   : name of longitude in DataArrays
 		pres	   : name of pressure in DataArrays [hPa]
@@ -1309,20 +1316,24 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 			if var is None or np.isscalar(var):
 				pass
 			else:
-				raise ValueError('all inputs have to be xarray.DataArrays!')
+				# raise ValueError('all inputs have to be xarray.DataArrays!')
+				print('ALL INPUTS HAVE TO BE XARRAY.DATAARRYAS! WILL CONTINUE AND TRY MY BEST...')
+	# shape
+	dim_names = FindCoordNames(uref)
+	if lon == 'infer':
+		lon = dim_names['lon']
+	if lat == 'infer':
+		lat = dim_names['lat']
+	if pres == 'infer':
+		pres = dim_names['pres']
 	p0 = 1.e3
 	rad2deg = 180/np.pi
-	radlat = np.deg2rad(phi_or_u[lat])
+	radlat = np.deg2rad(uref[lat])
 	coslat = np.cos(radlat)
 	one_over_coslat2 = coslat**(-2)
 	one_over_a2 = a0**(-2)
 	one_over_acoslat = (a0*coslat)**(-1)
-	mag_u = np.sqrt(uref**2 + vref**2)
 	f  = 2*Omega*np.sin(radlat)
-	# wave activity flux only valid for westerlies.
-	#  it is common practice to also mask weak westerlies,
-	#  with a value of 1m/s often seen
-	mask = uref > 1.0
 
 	if use_windspharm:
 		try:
@@ -1331,9 +1342,11 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 			use_windspharm = False
 			print('WARNING: YOU REQUESTED USE_WINDSPHARM=TRUE, BUT I CANNOT IMPORT WINDSPHARM. CONTINUING WIHOUT WINDSPHARM.')
 	if qg:
+		uref = -(phiref_or_v/f).differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+		vref =  (phiref_or_v/f).differentiate(lon,edge_order=2).reduce(np.nan_to_num)
 		psi = (phi_or_u-phiref_or_v)/f
 		u = -psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-		v = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+		v =  psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
 		dpsi_dlon =  v
 		dpsi_dlat = -u
 		if use_windspharm:
@@ -1348,6 +1361,11 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref,vref,lat='lat',lon='lon',p
 		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw,**kwpsi)
 		dpsi_dlon =  v
 		dpsi_dlat = -u
+	# wave activity flux only valid for westerlies.
+	#  it is common practice to also mask weak westerlies,
+	#  with a value of 1m/s often seen
+	mask = uref > 1.0
+	mag_u = np.sqrt(uref**2 + vref**2)
 	if use_windspharm:
 		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
 		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
