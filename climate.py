@@ -1276,7 +1276,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 		return psi_out
 
 ##############################################################################################
-def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer',lon='infer',pres='infer',tref=None,qg=False,use_windspharm=False,kwpsi={}):
+def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer',lon='infer',pres='infer',tref=None,is_anomaly=False,qg=False,use_windspharm=False,kwpsi={}):
 	'''
 		Compute Wave Activity Flux as in Takaya & Nakamura GRL 1997 and Takaya & Nakamura JAS 2001.
 		Results checked against plots at http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
@@ -1300,6 +1300,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 						 Else, assume S2 = tref.
 						 Note that S2 should be a function of
 						  pressure only (see Vallis 2017, Eq 5.127)
+                is_anomaly : if True, phi_or_u and phiref_or_v is anomaly. If False, they are full fields. [False]
 		qg	   : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
 					   Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
 		OUTPUTS:
@@ -1324,7 +1325,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		lon = dim_names['lon']
 	if lat == 'infer':
 		lat = dim_names['lat']
-	if pres == 'infer':
+	if pres == 'infer' and tref is not None:
 		pres = dim_names['pres']
 	p0 = 1.e3
 	rad2deg = 180/np.pi
@@ -1352,8 +1353,12 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		if use_windspharm:
 			vw = VectorWind(u,v,legfunc='computed')
 	else:
-		u = phi_or_u - uref
-		v = phiref_or_v - vref
+		if is_anomaly:
+			u = phi_or_u
+			v = phiref_or_v
+		else:
+			u = phi_or_u - uref
+			v = phiref_or_v - vref
 		if use_windspharm:
 			vw = VectorWind(u,v,legfunc='computed')
 		else:
