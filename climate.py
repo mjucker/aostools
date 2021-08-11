@@ -1152,7 +1152,9 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 		if vw is None:
 			from windspharm.xarray import VectorWind
 			vw = VectorWind(u,v)
-		return vw.streamfunction()
+		psi = vw.streamfunction()
+		# windspharm might invert latitude
+		return psi.interp_like(u)
 	else:
 		u = u.sortby(lat)
 		v = v.sortby(lat)
@@ -1290,8 +1292,9 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 						OR (full) meridional wind [m/s] (qg = False)
 		uref	   : reference zonal wind [m/s] - only needed if (qg = False)
 		vref	   : reference meridional wind [m/s] - only needed if (qg = False)
-		lat	   : name of latitude in DataArrays
-		lon	   : name of longitude in DataArrays
+		lat	       : name of latitude in DataArrays
+		lon	       : name of longitude in DataArrays OR value of pressure level.
+		               used for vector scaling on horizontal and for vertical derivatives if 3D
 		pres	   : name of pressure in DataArrays [hPa]
 		tref	   : reference temperature [K] for static stability parameter S2.
 					   If None, only compute horizontal wave flux.
@@ -1320,13 +1323,17 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 				# raise ValueError('all inputs have to be xarray.DataArrays!')
 				print('ALL INPUTS HAVE TO BE XARRAY.DATAARRYAS! WILL CONTINUE AND TRY MY BEST...')
 	# shape
-	dim_names = FindCoordNames(uref)
+	dim_names = FindCoordNames(phi_or_u)
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
 		lat = dim_names['lat']
-	if pres == 'infer' and tref is not None:
+	if pres == 'infer':
 		pres = dim_names['pres']
+	if isinstance(pres,str):
+		pref = phi_or_u[pres]
+	else:
+		pref = pres
 	p0 = 1.e3
 	rad2deg = 180/np.pi
 	radlat = np.deg2rad(uref[lat])
@@ -1398,7 +1405,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		wy =  uref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg) \
 		    + vref*(dpsi_dlat**2	- one_over_acoslat*psi*d2psi_dlat2*rad2deg)
 
-		coeff = coslat/2/mag_u
+		coeff = pref/p0*coslat/2/mag_u
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx
@@ -2688,8 +2695,8 @@ def FindCoordNames(ds):
 					  Latitude  = ds[dim_names['lat']]
 					  Pressure  = ds[dim_names['pres']]
 	'''
-	odims = list(ds.dims)
-	ldims = [d.lower() for d in ds.dims]
+	odims = list(ds.coords)
+	ldims = [d.lower() for d in odims]
 	dim_names = {}
 	# check for longitude
 	for lon in ['longitude','lon','xt_ocean']:
