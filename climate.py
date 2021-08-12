@@ -1388,7 +1388,18 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 	    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-	coeff = pref/p0*coslat/2/mag_u*rad2deg**2
+	# scaling: In TN01, Eq (38) uses spherical coordinates with z in vertical.
+	#  the scaling factor is then pref/p0*coslat/2/mag_u.
+	#  Eq (C5) shows the same in pressure coordinates, but with (x,y) in the
+	#  horizontal. The scaling factor is then 1/2/mag_u.
+	# By testing, I found that the latter is consistent with the horizontal EP flux,
+	#  i.e. wy.mean('lon') == ep1 if uref = u.mean('lon') if scaling factor = 1/2/mag_u.
+	#  Therefore, I use this as scaling factor. Note that this will then cause a
+	#   difference compared to Fig (a) at
+	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
+	
+	# coeff = pref/p0*coslat/2/mag_u*rad2deg**2 # coefficient for z-coords
+	coeff = rad2deg**2/2/mag_u # coefficient for p-coords
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx
