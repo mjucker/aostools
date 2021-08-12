@@ -1388,7 +1388,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 	    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-	coeff = pref/p0*coslat/2/mag_u
+	coeff = pref/p0*coslat/2/mag_u*rad2deg**2
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx
@@ -2429,7 +2429,7 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 	"""
 	# shape
 	if lon == 'infer' or lat == 'infer':
-	dim_names = FindCoordNames(phi_or_u)
+		dim_names = FindCoordNames(phi_or_u)
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
