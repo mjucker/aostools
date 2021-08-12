@@ -10,3 +10,7 @@ ES0 = 610.78 # [Pa]
 HLV = 2.5e6 # [J/kg]
 Tfreeze = 273.16 # [K]
 p0 = 1e3 # [hPa]
+
+def f(lat):
+    from numpy import sin,deg2rad
+    return 2*Omega*sin(deg2rad(lat))
