@@ -1287,7 +1287,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		Latitude, longitude in degrees, pressure in hPa.
 
 		INPUTS:
-		phi_or_u   : geopotential [m2/s2] (qg = True) OR zonal wind [m/s] (qg = False)
+		phi_or_u   : geopotential [m2/s2] (qg = True, typically phi = g*Z) OR zonal wind [m/s] (qg = False)
 		phiref_or_v: reference geopotential [m2/s2] (qg = True)
 						OR (full) meridional wind [m/s] (qg = False)
 		uref	   : reference zonal wind [m/s] - only needed if (qg = False)
@@ -1303,9 +1303,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 						 Else, assume S2 = tref.
 						 Note that S2 should be a function of
 						  pressure only (see Vallis 2017, Eq 5.127)
-                is_anomaly : if True, phi_or_u and phiref_or_v is anomaly. If False, they are full fields. [False]
-		qg	   : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
+        is_anomaly : if True, phi_or_u and phiref_or_v is anomaly. If False, they are full fields. [False]
+		qg	       : use QG streamfunction (phi-phiref)/f? Otherwise, use windspharm.streamfunction.
 					   Note that if qg=False, phi_or_u = u and phiref_or_v = v to compute the streamfunction.
+		use_windspharm: use windspharm package to compute streamfunction. Has no effect if qg=True.
 		OUTPUTS:
 		Wx,Wy	 : Activity Vectors along lon [m2/s2], lat [m2/s2]
 		Wx,Wy,Wz : Activity Vectors along lon [m2/s2], lat [m2/s2], pres [hPa.m/s2]
@@ -1336,13 +1337,15 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		pref = pres
 	p0 = 1.e3
 	rad2deg = 180/np.pi
-	radlat = np.deg2rad(uref[lat])
+	radlat = np.deg2rad(phi_or_u[lat])
 	coslat = np.cos(radlat)
 	one_over_coslat2 = coslat**(-2)
 	one_over_a2 = a0**(-2)
 	one_over_acoslat = (a0*coslat)**(-1)
 	f  = 2*Omega*np.sin(radlat)
 
+	if qg:
+		use_windspharm = False
 	if use_windspharm:
 		try:
 			from windspharm.xarray import VectorWind
@@ -1351,14 +1354,13 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 			print('WARNING: YOU REQUESTED USE_WINDSPHARM=TRUE, BUT I CANNOT IMPORT WINDSPHARM. CONTINUING WIHOUT WINDSPHARM.')
 	if qg:
 		uref = -(phiref_or_v/f).differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+		uref = uref/a0
 		vref =  (phiref_or_v/f).differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-		psi = (phi_or_u-phiref_or_v)/f
-		u = -psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-		v =  psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-		dpsi_dlon =  v
-		dpsi_dlat = -u
-		if use_windspharm:
-			vw = VectorWind(u,v,legfunc='computed')
+		vref = vref*one_over_acoslat
+		if is_anomaly:
+			psi = phi_or_u/f #[m2/s]
+		else:
+			psi = (phi_or_u-phiref_or_v)/f #[m2/s]
 	else:
 		if is_anomaly:
 			u = phi_or_u
@@ -1366,46 +1368,27 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		else:
 			u = phi_or_u - uref
 			v = phiref_or_v - vref
-		if use_windspharm:
-			vw = VectorWind(u,v,legfunc='computed')
-		else:
-			vw = None
-		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,vw=vw,**kwpsi)
-		dpsi_dlon =  v
-		dpsi_dlat = -u
+		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,**kwpsi)
 	# wave activity flux only valid for westerlies.
 	#  it is common practice to also mask weak westerlies,
 	#  with a value of 1m/s often seen
 	mask = uref > 1.0
 	mag_u = np.sqrt(uref**2 + vref**2)
-	if use_windspharm:
-		d2psi_dlon2,d2psi_dlon_dlat = vw.gradient(dpsi_dlon)
-		_,d2psi_dlat2 = vw.gradient(dpsi_dlat)
+	# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
+	# this (with qg=True,use_windspharm=False) has been checked against Fig (a) at
+	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
+	dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
+	dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
+	d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2) # [dpsi_dlon/lon] = [m/s/deg_lon]
+	d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m/s/deg_lat]
+	d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m/s/deg_lat]
 
-		wx = uref*(dpsi_dlon**2 - psi*d2psi_dlon2) + vref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-		wy = uref*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) + vref*(dpsi_dlat**2 - psi*d2psi_dlat2)
+	wx =	uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
+	    + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+	wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
+	    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
 
-		coeff = coslat/2/mag_u
-	else:
-		# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
-		# dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-		# dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-		d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2) # [dpsi_dlon/lon] = [m/s/deg_lon]
-		d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m/s/deg_lat]
-		d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m/s/deg_lat]
-
-		# wx =	uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
-		#     + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
-		# wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
-		#     + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
-
-
-		wx =  uref*(dpsi_dlon**2	- one_over_acoslat*psi*d2psi_dlon2*rad2deg) \
-		    + vref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg)
-		wy =  uref*(dpsi_dlon*dpsi_dlat - one_over_acoslat*psi*d2psi_dlon_dlat*rad2deg) \
-		    + vref*(dpsi_dlat**2	- one_over_acoslat*psi*d2psi_dlat2*rad2deg)
-
-		coeff = pref/p0*coslat/2/mag_u
+	coeff = pref/p0*coslat/2/mag_u
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
 	wx = coeff*wx
@@ -1420,23 +1403,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	#  there is a good chance wx,wy contain NaNs (no propagation where u<0).
 	#  therefore, using windspharm for the gradients does not work and we fall
 	#  back to the conventional way of computing gradients.
-	use_windspharm = False
-	if use_windspharm:
-		# unfortunately, vw.gradient inverts the order of latitude
-		#  to get the same order, we multiply by an xr.DataArray with the same
-		#  coordinates as the input
-		wx = wx.reduce(np.nan_to_num)
-		wy = wy.reduce(np.nan_to_num)
-		div1,_ = vw.gradient(wx)
-		_,div2 = vw.gradient(wy*coslat)
-		ones = DataArray(np.ones_like(wx),coords=wx.coords)
-		div1 = ones*div1
-		div2 = ones*div2
-	else:
-		div1 = wx.differentiate(lon,edge_order=2)
-		div2 = (wy*coslat).differentiate(lat,edge_order=2)
-		div1 = one_over_acoslat*div1*rad2deg
-		div2 = div2*rad2deg/a0
+	div1 = wx.differentiate(lon,edge_order=2)
+	div2 = (wy*coslat).differentiate(lat,edge_order=2)
+	div1 = one_over_acoslat*div1*rad2deg
+	div2 = div2*rad2deg/a0
 
 	div = (div1+div2)*86400
 	div.name = 'div'
