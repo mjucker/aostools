@@ -2404,16 +2404,16 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 
 
 #######################################################
-def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
+def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 	"""
 		Produce ENSO index timeseries from SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
 
 		INPUTS:
 			sst:  xarray.DataArray which will be averaged over Nino domains
-			lon:  name of longitude dimension. Has to be in [0,360].
-			lat:  name of latitude dimension. Has to be increasing.
-			time: name of time dimension.
+			lon:  name of longitude dimension. Has to be in [0,360]. If 'infer', try to guess.
+			lat:  name of latitude dimension. Has to be increasing. If 'infer', try to guess.
+			time: name of time dimension. If 'infer', try to guess.
 			avg:  size of rolling window for rolling time average.
 			nino: which Nino index to compute. Choices are
 					'1+2','3','4','3.4','oni','tni','modiki'
@@ -2427,6 +2427,13 @@ def Nino(sst, lon='lon', lat='lat', time='time', avg=5, nino='3.4'):
 			sst: spatially averaged over respective Nino index domain
 				  note that no running means are performed.
 	"""
+	# shape
+	if lon == 'infer' or lat == 'infer':
+	dim_names = FindCoordNames(phi_or_u)
+	if lon == 'infer':
+		lon = dim_names['lon']
+	if lat == 'infer':
+		lat = dim_names['lat']
 	ninos = {
 		'1+2' : {lon:slice(270,280),lat:slice(-10,0)},
 		'3'   : {lon:slice(210,270),lat:slice(-5,5)},
