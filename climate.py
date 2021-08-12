@@ -1331,10 +1331,6 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		lat = dim_names['lat']
 	if pres == 'infer':
 		pres = dim_names['pres']
-	if isinstance(pres,str):
-		pref = phi_or_u[pres]
-	else:
-		pref = pres
 	p0 = 1.e3
 	rad2deg = 180/np.pi
 	radlat = np.deg2rad(phi_or_u[lat])
@@ -1398,7 +1394,6 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	#   difference compared to Fig (a) at
 	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
 	
-	# coeff = pref/p0*coslat/2/mag_u*rad2deg**2 # coefficient for z-coords
 	coeff = rad2deg**2/2/mag_u # coefficient for p-coords
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
