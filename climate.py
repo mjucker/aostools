@@ -1393,7 +1393,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	#  Therefore, I use this as scaling factor. Note that this will then cause a
 	#   difference compared to Fig (a) at
 	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
-	
+
 	coeff = rad2deg**2/2/mag_u # coefficient for p-coords
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
@@ -2300,8 +2300,11 @@ def ComputeRossbyWaveSource(u,v):
 
 	# Compute components of rossby wave source: absolute vorticity, divergence,
 	# irrotational (divergent) wind components, gradients of absolute vorticity.
+	# divergence can contain spurious features ("stripes") at high res. truncate to avoid this.
+	dim_names = FindCoordNames(u)
+	npnts = min(len(u[dim_names['lat']]),len(u[dim_names['lon']]))
 	eta = w.absolutevorticity()
-	div = w.divergence()
+	div = w.divergence(truncation=npnts//2)
 	uchi, vchi = w.irrotationalcomponent()
 	etax, etay = w.gradient(eta)
 
@@ -2313,7 +2316,7 @@ def ComputeRossbyWaveSource(u,v):
 	return rws
 
 #######################################################
-def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',coast=False,kw_args=None):
+def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',coast=False,kw_args=None,fig_args=None):
 	"""
 		Create a new figure with a given projection. To plot data, invoke:
 			fig,ax,kw = Projection()
@@ -2339,7 +2342,10 @@ def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',c
 	else:
 		proj = cproj(**kw_args)
 	from matplotlib import pyplot as plt
-	fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj})
+	if fig_args is None:
+		fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj})
+	else:
+		fig,ax = plt.subplots(nrows=nrows,ncols=ncols,subplot_kw={'projection':proj},**fig_args)
 	if coast:
 		if nrows*ncols > 1:
 			for a in ax.flatten():
