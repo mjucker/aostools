@@ -1364,7 +1364,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		else:
 			u = phi_or_u - uref
 			v = phiref_or_v - vref
-		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,**kwpsi)
+		psi = ComputeStreamfunction(u,v,lat,lon,use_windspharm=use_windspharm,**kwpsi) #[m2/s]
 	# wave activity flux only valid for westerlies.
 	#  it is common practice to also mask weak westerlies,
 	#  with a value of 1m/s often seen
@@ -1373,16 +1373,18 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	# psi.differentiate(lon) == np.gradient(psi)/np.gradient(lon) [psi/lon]
 	# this (with qg=True,use_windspharm=False) has been checked against Fig (a) at
 	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
-	dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num)
-	dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num)
-	d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2) # [dpsi_dlon/lon] = [m/s/deg_lon]
-	d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m/s/deg_lat]
-	d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m/s/deg_lat]
+	dpsi_dlon = psi.differentiate(lon,edge_order=2).reduce(np.nan_to_num) # [m2/s/deg]
+	dpsi_dlat = psi.differentiate(lat,edge_order=2).reduce(np.nan_to_num) # [m2/s/deg]
+	d2psi_dlon2 = dpsi_dlon.differentiate(lon,edge_order=2) # [dpsi_dlon/lon] = [m2/s/deg2]
+	d2psi_dlat2 = dpsi_dlat.differentiate(lat,edge_order=2) # [m2/s/deg2]
+	d2psi_dlon_dlat = dpsi_dlon.differentiate(lat,edge_order=2) # [m2/s/deg2]
 
 	wx =	uref*one_over_coslat2*one_over_a2*(dpsi_dlon**2 - psi*d2psi_dlon2) \
 	    + vref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat)
+	#[m/s*1/m2*m4/s2/deg2] = [m3/s3/deg2]
 	wy =	uref*one_over_a2/coslat*(dpsi_dlon*dpsi_dlat - psi*d2psi_dlon_dlat) \
 	    + vref*one_over_a2*(dpsi_dlat**2 - psi*d2psi_dlat2)
+	#[m3/s3/deg2]
 
 	# scaling: In TN01, Eq (38) uses spherical coordinates with z in vertical.
 	#  the scaling factor is then pref/p0*coslat/2/mag_u.
@@ -1394,10 +1396,10 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	#   difference compared to Fig (a) at
 	#   http://www.atmos.rcast.u-tokyo.ac.jp/nishii/programs/
 
-	coeff = rad2deg**2/2/mag_u # coefficient for p-coords
+	coeff = rad2deg**2/2/mag_u # coefficient for p-coords, [deg2*s/m]
 
 	# get the vectors in physical units of m2/s2, correcting for radians vs. degrees
-	wx = coeff*wx
+	wx = coeff*wx #[deg2*s/m*m3/s3/deg2] = [m2/s2]
 	wy = coeff*wy
 
 	wx.name = 'wx'
@@ -1423,31 +1425,35 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 	else:
 		# psi.differentiate(pres) == np.gradient(psi)/np.gradient(pres) [psi/pres]
 		dpsi_dpres = psi.differentiate(pres,edge_order=2).reduce(np.nan_to_num) # [m2/s/hPa]
-		d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2) # [m/s/hPa]
-		d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2) # [m/s/hPa]
+		d2psi_dlon_dpres = dpsi_dlon.differentiate(pres,edge_order=2) # [m2/s/deg/hPa]
+		d2psi_dlat_dpres = dpsi_dlat.differentiate(pres,edge_order=2) # [m/s/deg/hPa]
 		# S2 = -\alpha*\partial_p\ln\theta, \alpha = 1/\rho = Rd*T/p
 		#    = R/p*(p/p0)**\kappa d\theta/dp, Vallis (2017, p. 192 (eq. 5.127))
 		#  this should be a reference profile and a function of pressure only!
 		pressure = uref[pres]
 		if isinstance(tref,DataArray):
-			pp0 = (p0/pressure)**kappa
-			theta = pp0*tref
-			S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2) # [m2/hPa2/s2]
+			pp0 = (p0/pressure)**kappa # []
+			theta = pp0*tref # [K]
+			S2 = -Rd/pressure*(pressure/p0)**kappa*theta.differentiate(pres,edge_order=2)
+			# [J/kg/K/hPa*K/hPa] = [J/kg/hPa2] = [kg*m2/s2/kg/hPa2] = [m2/s2/hPa2] = [m3/kg/hPa]
 			# S2 = S2.where(S2>1e-7,1e-7) # avoid division by zero
 		else:
 			S2 = tref
 
-		wz = f**2/S2*( uref*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) + vref*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
-		# units: using [S2] = m3/kg/hPa, we get [wz] = kg/s4 = hPa.m/s2. Note that using [S2] = m2/s2/hPa2 will lead to m5/s2/hPa3,
-		#  which is correct but much less informative.
+		wz = f**2/S2*( uref*one_over_acoslat*(dpsi_dlon*dpsi_dpres - psi*d2psi_dlon_dpres) \
+					+ vref/a0*(dpsi_dlat*dpsi_dpres - psi*d2psi_dlat_dpres) )
+		# units: using [S2] = m3/kg/hPa
+		# s-2 * kg * hPa * m-3 * m * s-1 * m-1 * m2 * s-1 * m2 * s-1 * deg-1 * hPa-1 = kg*m/s5/deg
 
-		wz = coeff*wz
+		coeff = rad2deg/2/mag_u # coefficient for p-coords, [deg*s/m]
+
+		wz = coeff*wz # [wz] = kg*m/s5/deg*deg*s/m = kg/s4 = hPa.m/s2.
 
 		wz.name = 'wz'
 		wz.attrs['units'] = 'hPa.m/s2'
 		wz.attrs['alternative_units'] = 'kg/s4'
 
-		div3 = wz.differentiate(pres,edge_order=2)
+		div3 = wz.differentiate(pres,edge_order=2)*86400
 		div3.name = 'div'
 		div3.attrs['units'] = 'm/s/d'
 
