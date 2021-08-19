@@ -14,3 +14,7 @@ p0 = 1e3 # [hPa]
 def f(lat):
     from numpy import sin,deg2rad
     return 2*Omega*sin(deg2rad(lat))
+
+def coslat(lat):
+    from numpy import cos,deg2rad
+    return cos(deg2rad(lat))
