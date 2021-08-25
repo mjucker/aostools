@@ -2361,7 +2361,7 @@ def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',c
 	return fig,ax,{'transform':getattr(ccrs,transform)()}
 
 #######################################################
-def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1e3):
+def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 	"""
 		Convert 3D vector (u,v,w) from Cartesian coordinates to
 			spherical coordinates for correct plotting on a 3D sphere.
@@ -2390,6 +2390,13 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 		if not isinstance(var,DataArray):
 			raise ValueError('u,v,w must be xarray DataArrays!')
 	import numpy as np
+	dim_names = FindCoordNames(u)
+	if lon == 'infer':
+		lon = dim_names['lon']
+	if lat == 'infer':
+		lat = dim_names['lat']
+	if pres == 'infer':
+		pres = dim_names['pres']
 	radlat = np.deg2rad(u[lat])
 	radlon = np.deg2rad(u[lon])
 	coslat = np.cos(radlat)
@@ -2412,9 +2419,9 @@ def Cart2Sphere(u, v, w, lon='longitude', lat='latitude', pres=None, H=7e3, p0=1
 		return a,b,c
 	# also change the vertical coordinate from pressure to height (log-pressure)
 	z = -H*np.log(u[pres]/p0).values
-	a[pres].values = z
-	b[pres].values = z
-	c[pres].values = z
+	a = a.assign_coords({pres:z})
+	b = b.assign_coords({pres:z})
+	c = c.assign_coords({pres:z})
 	a = a.rename({pres:'z'})
 	b = b.rename({pres:'z'})
 	c = c.rename({pres:'z'})
