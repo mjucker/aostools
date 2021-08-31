@@ -2429,9 +2429,9 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
+def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 	"""
-		Produce ENSO index timeseries from SST according to Technical Notes
+		Produce variability index timeseries from SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
 
 		INPUTS:
@@ -2439,38 +2439,42 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 			lon:  name of longitude dimension. Has to be in [0,360]. If 'infer', try to guess.
 			lat:  name of latitude dimension. Has to be increasing. If 'infer', try to guess.
 			time: name of time dimension. If 'infer', try to guess.
-			avg:  size of rolling window for rolling time average.
-			nino: which Nino index to compute. Choices are
-					'1+2','3','4','3.4','oni','tni','modiki'
+			avg:  size of rolling window for rolling time average [months].
+			index: which index to compute. Choices are
+				   Nino: '1+2','3','4','3.4','oni','tni','modiki'
 					'oni' is the same as '3.4', as they only
-					   distinguish themselves via the rolling
-					   average period (3 months for oni,
-					   5 months for 3.4)
+					 distinguish themselves via the rolling
+					 average period (3 months for oni,
+					 5 months for 3.4)
                                         'modiki' is the same as 'tni'
+                                    IOD: 'dmi' is Indian Ocean Dipole
 
 		OUTPUTS:
-			sst: spatially averaged over respective Nino index domain
-				  note that no running means are performed.
+			sst: spatially averaged over respective index domain
+				  note that output is monthly
 	"""
 	# shape
 	if lon == 'infer' or lat == 'infer':
-		dim_names = FindCoordNames(phi_or_u)
+		dim_names = FindCoordNames(sst)
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
 		lat = dim_names['lat']
-	ninos = {
+	indList = {
 		'1+2' : {lon:slice(270,280),lat:slice(-10,0)},
 		'3'   : {lon:slice(210,270),lat:slice(-5,5)},
 		'4'   : {lon:slice(160,210),lat:slice(-5,5)},
 		'3.4' : {lon:slice(190,240),lat:slice(-5,5)},
 		'oni' : {lon:slice(190,240),lat:slice(-5,5)},
+                'tni' : '1+2std - 4std',
+                'modiki':'tni',
+                'dmi' : 'dmi1 - dmi2',
+                'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
+                'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)}
 	}
-	possible_ninos = list(ninos.keys())+['tni']
-	if nino == 'modiki':
-		nino = 'tni'
-	if nino not in possible_ninos:
-		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(nino,', '.join(possible_ninos)))
+	possible_ninos = list(indList.keys())
+	if index not in possible_ninos:
+		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(index,', '.join(possible_ninos)))
 	lon_name = None
 	lat_name = None
 	if sst[lon].min() < 0 or sst[lon].max() <= 180:
@@ -2478,24 +2482,47 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 	if sst[lat][0] > sst[lat][-1]:
 		lat_name = lat
 	if lon_name is not None or lat_name is not None:
-		print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
+		#print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
 		sst = StandardGrid(sst,lon_name,lat_name)
 
-	def NinoAvg(sst,nino,time,avg):
-		ssta = sst.sel(ninos[nino]).mean(dim=[lon,lat])
+	sst = sst.resample({time:'1M'}).mean()
+
+	def NinoAvg(sst,nino,time,avg,std=True):
+		ssta = sst.sel(indList[nino]).mean(dim=[lon,lat])
 		sstc = ssta.groupby('.'.join([time,'month'])).mean(dim=time)
 		ssta = ssta.groupby('.'.join([time,'month'])) - sstc
 		if avg is not None:
+			ssta = ssta.load()
 			ssta = ssta.rolling({time:avg},min_periods=1).mean()
-		return ssta/ssta.std(dim=time)
+		if std:
+			ssta = ssta/ssta.std(dim=time)
+		return ssta
 
-	if nino == 'tni':
-		n12 = NinoAvg(sst,'1+2',time,None)
-		n4  = NinoAvg(sst,'4',time,None)
-		tni = (n12-n4).rolling({time:avg},min_periods=1).mean()
-		return tni/tni.std(dim=time)
+	combined = False
+	if isinstance(indList[index],str):
+		comb = indList[index]
+		if '-' in comb:
+			combined = True
+		else:
+			index = comb
+			combined = False
+
+	if combined:
+		ind1 = comb.split('-')[0].replace(' ','')
+		ind2 = comb.split('-')[1].replace(' ','')
+		std = 'std' in ind1
+		ind1 = NinoAvg(sst,ind1.replace('std',''),time,None,std)
+		std = 'std' in ind2
+		ind2 = NinoAvg(sst,ind2.replace('std',''),time,None,std)
+		indx = (ind1-ind2).load()
+		indx = indx.rolling({time:avg},min_periods=1).mean()
+		out  = (indx)/indx.std(dim=time)
+		out.name = index.upper()
+		return out
 	else:
-		return NinoAvg(sst,nino,time,avg)
+		out = NinoAvg(sst,index,time,avg)
+		out.name = index.upper()
+		return out
 
 
 #######################################################
