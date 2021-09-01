@@ -2648,7 +2648,7 @@ def StatTest(x,y,dim,test='KS',parallel=False):
 	else:
 		pval = np.zeros_like(sx.stacked)
 		for i in range(nspace):
-			pval[i] = ComputeStat(isx,y,sy,test)
+			pval[i] = ComputeStat(i,sx,y,sy,test)
 	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
 	return pvalx
 
