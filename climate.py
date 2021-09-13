@@ -1460,7 +1460,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask),div3.where(mask)
 
 ##############################################################################################
-def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None,quiv_args=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
@@ -1483,6 +1483,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		scale	: keyword argument for quiver(). Smaller is longer [None]
 				  besides fixing the length, it is also usefull when calling this function inside a
 				   script without display as the only way to have a quiverkey on the plot.
+               quiv_args: further arguments passed to quiver plot.
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
@@ -1534,6 +1535,9 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	#
 	# plot the arrows onto axis
 	quivArgs = {'angles':'uv','scale_units':'inches','pivot':pivot}
+	if quiv_args is not None:
+		for key in quiv_args.keys():
+			quivArgs[key] = quiv_args[key]
 	if scale is not None:
 		quivArgs['scale'] = scale
 	if newax:
