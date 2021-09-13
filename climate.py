@@ -2615,7 +2615,7 @@ def ComputeStat(i,sx,y,sy,test):
 			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
 	return ploc
 
-def StatTest(x,y,dim,test='KS',parallel=False):
+def StatTest(x,y,dim=None,test='KS',parallel=False):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
@@ -2628,28 +2628,38 @@ def StatTest(x,y,dim,test='KS',parallel=False):
 		    'KS' -> Kolmogorov-Smirnov
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
-			'T'  -> T-test 1 sample with y=mean
+		    'T'  -> T-test 1 sample with y=mean
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimensionas x,y except `dim`.
 	'''
 	from xarray import DataArray
+	if dim is None or len(x.dims) == 1:
+		sx = x.expand_dims(stacked=[0])
+		parallel = False
+	else:
+		sx = StackArray(x,dim)
 	if parallel:
 		import parmap
-	sx = StackArray(x,dim)
+	nspace = len(sx.stacked)
 	if isinstance(y,DataArray):
-		sy = StackArray(y,dim)
+		if dim is None or len(y.dims) == 1:
+			sy = y.expand_dims(stacked=[0])
+		else:
+			sy = StackArray(y,dim)
 	else:
 		sy = None
-	nspace = len(sx.stacked)
 	if parallel:
 		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test)
 	else:
-		pval = np.zeros_like(sx.stacked)
+		pval = np.zeros(sx.stacked.shape)
 		for i in range(nspace):
 			pval[i] = ComputeStat(i,sx,y,sy,test)
-	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+	if nspace > 1:
+		pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+	else:
+		pvalx = pval[0]
 	return pvalx
 
 #######################################################
