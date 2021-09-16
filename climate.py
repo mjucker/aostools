@@ -1460,7 +1460,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask),div3.where(mask)
 
 ##############################################################################################
-def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None,quiv_args=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
@@ -1483,6 +1483,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		scale	: keyword argument for quiver(). Smaller is longer [None]
 				  besides fixing the length, it is also usefull when calling this function inside a
 				   script without display as the only way to have a quiverkey on the plot.
+               quiv_args: further arguments passed to quiver plot.
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
@@ -1534,6 +1535,9 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	#
 	# plot the arrows onto axis
 	quivArgs = {'angles':'uv','scale_units':'inches','pivot':pivot}
+	if quiv_args is not None:
+		for key in quiv_args.keys():
+			quivArgs[key] = quiv_args[key]
 	if scale is not None:
 		quivArgs['scale'] = scale
 	if newax:
@@ -2246,9 +2250,9 @@ def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
 	"""
 	if lon_name == 'infer' or lat_name == 'infer':
 		dim_names = FindCoordNames(data)
-		if lon_name == 'infer':
+		if lon_name == 'infer' and 'lon' in dim_names.keys():
 			lon_name = dim_names['lon']
-		if lat_name == 'infer':
+		if lat_name == 'infer' and 'lat' in dim_names.keys():
 			lat_name = dim_names['lat']
 	if lat_name is not None and lat_name in data.coords:
 		if data[lat_name][0] > data[lat_name][-1]:
@@ -2615,7 +2619,7 @@ def ComputeStat(i,sx,y,sy,test):
 			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
 	return ploc
 
-def StatTest(x,y,dim,test='KS',parallel=False):
+def StatTest(x,y,dim=None,test='KS',parallel=False):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
@@ -2628,28 +2632,38 @@ def StatTest(x,y,dim,test='KS',parallel=False):
 		    'KS' -> Kolmogorov-Smirnov
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
-			'T'  -> T-test 1 sample with y=mean
+		    'T'  -> T-test 1 sample with y=mean
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimensionas x,y except `dim`.
 	'''
 	from xarray import DataArray
+	if dim is None or len(x.dims) == 1:
+		sx = x.expand_dims(stacked=[0])
+		parallel = False
+	else:
+		sx = StackArray(x,dim)
 	if parallel:
 		import parmap
-	sx = StackArray(x,dim)
+	nspace = len(sx.stacked)
 	if isinstance(y,DataArray):
-		sy = StackArray(y,dim)
+		if dim is None or len(y.dims) == 1:
+			sy = y.expand_dims(stacked=[0])
+		else:
+			sy = StackArray(y,dim)
 	else:
 		sy = None
-	nspace = len(sx.stacked)
 	if parallel:
 		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test)
 	else:
-		pval = np.zeros_like(sx.stacked)
+		pval = np.zeros(sx.stacked.shape)
 		for i in range(nspace):
-			pval[i] = ComputeStat(isx,y,sy,test)
-	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+			pval[i] = ComputeStat(i,sx,y,sy,test)
+	if nspace > 1:
+		pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+	else:
+		pvalx = pval[0]
 	return pvalx
 
 #######################################################
