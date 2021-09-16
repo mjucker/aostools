@@ -2710,7 +2710,7 @@ def AddColorbar(fig,axs,cf,shrink=0.95):
           OUTPUTS:
              cbar: colorbar object.
         '''
-        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=0.95)
+        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
 #######################################################
 def FindCoordNames(ds):
 	'''Find the actual dimension names in xr.Dataset or xr.DataArray
