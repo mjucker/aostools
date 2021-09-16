@@ -2250,9 +2250,9 @@ def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
 	"""
 	if lon_name == 'infer' or lat_name == 'infer':
 		dim_names = FindCoordNames(data)
-		if lon_name == 'infer':
+		if lon_name == 'infer' and 'lon' in dim_names.keys():
 			lon_name = dim_names['lon']
-		if lat_name == 'infer':
+		if lat_name == 'infer' and 'lat' in dim_names.keys():
 			lat_name = dim_names['lat']
 	if lat_name is not None and lat_name in data.coords:
 		if data[lat_name][0] > data[lat_name][-1]:
