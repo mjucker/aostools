@@ -1716,7 +1716,7 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 		raise ValueError('component has to contain A,B and/or C, but got '+component)
 	# some constants
 	from .constants import Omega
-	from .constants import p0 as p0
+	from .constants import p0_Pa as p0
 
 	## make sure we have the dimesions as expected
 	if uz.shape != Tz.shape:
