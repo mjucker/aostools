@@ -2049,6 +2049,45 @@ def GetAnomaly(x,axis=-1):
 	x = AxRoll(xt,axis,invert=True)
 	return x
 
+##############################################################################################
+def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
+	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
+
+		If y!=None, returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Dimension along which Fourier is performed is either gone (wave>=0) or has len(axis)/2+1 due to Fourier symmetry for real signals (wave<0).
+
+		If y=None and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
+		If y=None and wave<0, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
+
+	INPUTS:
+		x	   - the array to decompose. xr.DataArray
+		y	   - second array if wanted. xr.DataArray
+		wave	   - which mode to extract. all if <0
+		dim	   - along which dimension of x (and y) to decompose
+		anomaly	   - if not None, name of dimension along which to compute anomaly first.
+	OUTPUTS:
+		xym	   - data. xr.DataArray
+	"""
+	from xarray import DataArray
+	if anomaly is not None:
+		x = x - x.mean(anomaly)
+		if y is not None:
+			y = y - y.mean(anomaly)
+	sdims = [d for d in x.dims if d != dim]
+	xstack = x.stack(stacked=sdims)
+	ystack = y.stack(stacked=sdims)
+	gw = GetWaves(xstack,ystack,wave=wave,axis=xstack.get_axis_num(dim))
+	if y is None and wave >= 0: # result in real space
+		stackcoords = list(xstack.coords)
+	elif y is None and wave < 0: # additional first dimension of wave number
+		stackcoords = [('k',np.arange(gw.shape[0]))] + list(xstack.coords)
+	elif y is not None and wave >= 0: # original dimension is gone
+		stackcoords = [xstack.stacked]
+	elif y is not None and wave < 0: # additional dimension of wavenumber
+		stackcoords = [('k',np.arange(gw.shape[0])), xstack.stacked]
+	gwx = DataArray(gw,coords=stackcoords)
+	return gwx.unstack()
+                
+
 
 #######################################################
 def Meters2Coord(data,coord,mode='m2lat',axis=-1):
