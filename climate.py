@@ -1789,9 +1789,7 @@ def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=100
 			uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
 			Tz        - zonal mean temperature [K], dim pres x lat OR N x pres x lat
 			lat       - name of latitude [degrees]
-			pres      - name of
-				lat       - latitude [degrees]
-				pres      - pressure [hPa]pressure [hPa]
+			pres      - name of pressure [hPa]
 			component - option to only return one, two, or all of the components.
 						 Add a letter for each of the components 'A', 'B', 'C'.
 						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
