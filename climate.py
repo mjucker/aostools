@@ -531,7 +531,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	#
 	return v_bar,t_bar
 
-def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
+def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean',wave=0):
 	""" Computes the vertical eddy components of the residual circulation,
 		bar(v'Theta'/Theta_p).
 		Output units are [v_bar] = [v], [t_bar] = [v*p]
@@ -546,6 +546,7 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
 			ref  - how to treat dTheta/dp:
 			       - 'rolling-X' : centered rolling mean over X days
 			       - 'mean'	     : full time mean
+			wave - wave number: if == 0, return total. else passed to GetWavesXr()
 		OUPUTS:
 			v_bar - zonal mean meridional wind [v]
 			t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
@@ -565,14 +566,21 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
 	dthdp = t_bar.differentiate(p,edge_order=2) # dthdp = d(theta_bar)/dp
 	dthdp = dthdp.where(dthdp != 0)
 	# time mean of d(theta_bar)/dp
-	if 'rolling' in ref:
-		r = int(ref.split('-')[-1])
-		dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
-	elif ref == 'mean':
-		dthdp = dthdp.mean(time)
-
-	vpTp  = (v - v_bar)*(t - t_bar)
-	t_bar = vpTp.mean(lon)/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
+	if time in dthdp.dims:
+		if 'rolling' in ref:
+			r = int(ref.split('-')[-1])
+			dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
+		elif ref == 'mean':
+			dthdp = dthdp.mean(time)
+	# now get wave component
+	if isinstance(wave,list):
+		vpTp = GetWavesXr(v,t,wave=-1).sel(k=wave).sum('k')
+	elif wave == 0:
+		vpTp = (v - v_bar)*(t - t_bar)
+		vpTp = vpTp.mean(lon)  # vpTp = bar(v'Th')
+	else:
+		vpTp = GetWavesXr(v,t,wave=wave) # vpTp = bar(v'Th'_{k=wave})
+	t_bar = vpTp/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
 	#
 	return v_bar,t_bar
 
@@ -915,7 +923,7 @@ def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time=
 	return w_bar + R*vt_bar
 
 ##############################################################################################
-def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
+def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
@@ -933,7 +941,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	  t    - temperature, shape(time,p,lat,lon) [K]
 	  w    - pressure velocity, optional, shape(time,p,lat,lon) [hPa/s]
 	  do_ubar - compute shear and vorticity correction? optional
-	  wave - only include this wave number. all if <0, sum over waves if a list. optional
+	  wave - only include this wave number. total if == 0, all waves if <0, single wave if >0, sum over waves if a list. optional
 	OUTPUTS:
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -968,7 +976,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	v = GetAnomaly(v)
 	if isinstance(wave,list):
 		upvp = np.sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
-	elif wave<0:
+	elif wave == 0:
 		upvp = np.nanmean(u*v,axis=-1)
 	else:
 		upvp = GetWaves(u,v,wave=wave)
@@ -988,7 +996,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 		w = GetAnomaly(w) # w = w' [hPa/s]
 		if isinstance(wave,list):
 			w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
-		elif wave<0:
+		elif wave == 0:
 			w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
 		else:
 			w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
@@ -1015,11 +1023,11 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',ref='mean',w=None,do_ubar=False):
+def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',ref='mean',w=None,do_ubar=False,wave=0):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
-		coordinates, i.e. do not include the geometric factor a*cos\phi.
+		coordinates, i.e. do not incluxde the geometric factor a*cos\phi.
 		Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
 		The divergence is in units of m/s/day, and therefore represents
 		the deceleration of the zonal wind. This is actually the quantity
@@ -1036,6 +1044,7 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	  ref  - method to use for dTheta/dp, used for ComputeVertEddy
 	  w    - pressure velocity, if not None, xarray.DataArray [hPa/s]
 	  do_ubar - compute shear and vorticity correction?
+	  wave - only include this wave number. total if == 0, all waves if <0, sum over waves if a list. optional
 	OUTPUTS (all xarray.DataArray):
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -1069,12 +1078,17 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	fhat = f - fhat # [1/s]
 	#
 	## compute thickness weighted heat flux [m.hPa/s]
-	vbar,vertEddy = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref) # vertEddy = bar(v'Th'/(dTh_bar/dp))
+	vbar,vertEddy = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref,wave) # vertEddy = bar(v'Th'/(dTh_bar/dp))
 	#
 	## get zonal anomalies
-	u = u - u.mean(lon)
-	v = v - v.mean(lon)
-	upvp = (u*v).mean(lon)
+	if isinstance(wave,list):
+		upvp = GetWavesXr(u,v,wave=-1).sel(k=wave).sum('k')
+	elif wave == 0:
+		u = u - u.mean(lon)
+		v = v - v.mean(lon)
+		upvp = (u*v).mean(lon)
+	else:
+		upvp = GetWavesXr(u,v,wave=wave)
 	#
 	## compute the horizontal component
 	if do_ubar:
@@ -1088,8 +1102,13 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	#
 	ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
 	if w is not None:
-		w = w - w.mean(lon) # w = w' [hPa/s]
-		w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
+		if isinstance(wave,list):
+			w = GetWavesXr(u,w,wave=-1).sel(k=wave).sum('k')
+		elif wave == 0:
+			w = w - w.mean(lon) # w = w' [hPa/s]
+			w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
+		else:
+			w = GetWavesXr(u,w,wave=wave)
 		ep2_cart = ep2_cart - w # [m.hPa/s2]
 	#
 	#
@@ -1113,6 +1132,8 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	#
 	# make sure order is the same as input
 	new_order = [d for d in initial_order if d != lon]
+	if not isinstance(wave,list) and wave < 0:
+		new_order = ['k'] + new_order
 	# give the DataArrays their names
 	ep1_cart.name = 'ep1'
 	ep2_cart.name = 'ep2'
@@ -2009,6 +2030,9 @@ def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
 					mask[-m,:]= 1
 					xym[m,:] = np.sum(xyf*mask,axis=0)
 					mask[:] = 0
+				# wavenumber 0 is total of all waves
+                                #  this makes more sense than the product of the zonal means
+				xym[0,:] = np.nansum(xym[1:,:],axis=0)
 				xym = AxRoll(xym,axis,invert=True)
 			else:
 				xym = xyf[wave,:]
