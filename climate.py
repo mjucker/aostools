@@ -2072,12 +2072,15 @@ def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
 			y = y - y.mean(anomaly)
 	sdims = [d for d in x.dims if d != dim]
 	xstack = x.stack(stacked=sdims)
-	ystack = y.stack(stacked=sdims)
+	if y is None:
+		ystack=None
+	else:
+		ystack = y.stack(stacked=sdims)
 	gw = GetWaves(xstack,ystack,wave=wave,axis=xstack.get_axis_num(dim))
 	if y is None and wave >= 0: # result in real space
-		stackcoords = list(xstack.coords)
+		stackcoords = [xstack[d] for d in xstack.dims]
 	elif y is None and wave < 0: # additional first dimension of wave number
-		stackcoords = [('k',np.arange(gw.shape[0]))] + list(xstack.coords)
+		stackcoords = [('k',np.arange(gw.shape[0]))] + [xstack[d] for d in xstack.dims]
 	elif y is not None and wave >= 0: # original dimension is gone
 		stackcoords = [xstack.stacked]
 	elif y is not None and wave < 0: # additional dimension of wavenumber
