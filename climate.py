@@ -2659,7 +2659,7 @@ def StackArray(x,dim):
 	   stacked: same as x, but stacked
 	'''
 	dims = []
-	for d in x.coords:
+	for d in x.dims:
 		if d != dim:
 			dims.append(d)
 	return x.stack(stacked=dims)
@@ -2681,22 +2681,40 @@ def ComputeStat(i,sx,y,sy,test):
 			_,ploc = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
 		elif test == 'T':
 			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
+		elif test == 'sign': # not really a sig test, just checking sign agreement
+                        # note that here a high p-value means significant, as it means
+                        #  that a lot of members have the same sign
+			lenx = len(sx.isel(stacked=i))
+			if y is None: # check sx for same sign
+				posx = np.sum(sx.isel(stacked=i) > 0)
+				ploc = max(posx,lenx-posx)/lenx
+			elif isinstance(y,float) or isinstance(y,int): # check sx for sign of y
+				samex = np.sum( np.sign(sx.isel(stacked=i)) == np.sign(y) )
+				ploc  = samex/lenx
+			else: # check two ensembles for same sign
+				# ensembles are not 1-by-1, so we can't check sign along dimension
+				lenx = len(sx.isel(stacked=i))
+				posx = np.sum(sx.isel(stacked=i) > 0)/lenx
+				leny = len(sy.isel(stacked=i))
+				posy = np.sum(sy.isel(stacked=i) > 0)/leny
+				ploc = min(posx,posy)/max(posx,posy)
 	return ploc
 
-def StatTest(x,y,dim=None,test='KS',parallel=False):
+def StatTest(x,y,test,dim=None,parallel=False):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
 
 	   INPUTS:
 	      x	 : xr.DataArray for testing.
-	      y	 : xr.DataArray for testing against.
+	      y	 : xr.DataArray or scalar for testing against. Or None for single-ensemble sign test.
 	      dim: dimension name along which to perform the test.
 	      test:which test to use:
 		    'KS' -> Kolmogorov-Smirnov
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
 		    'T'  -> T-test 1 sample with y=mean
+                    'sign'->test against sign only. 
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
