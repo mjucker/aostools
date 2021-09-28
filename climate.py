@@ -2824,11 +2824,11 @@ def FindCoordNames(ds):
 	ldims = [d.lower() for d in odims]
 	dim_names = {}
 	# check for longitude
-	for lon in ['longitude','lon','xt_ocean']:
+	for lon in ['longitude','lon','xt_ocean','lon_sub1']:
 		if lon in ldims:
 			indx = ldims.index(lon)
 			dim_names['lon'] = odims[indx]
-	for lat in ['latitude','lat','yt_ocean']:
+	for lat in ['latitude','lat','yt_ocean','lat_sub1']:
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
