@@ -546,6 +546,7 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean',wave
 			ref  - how to treat dTheta/dp:
 			       - 'rolling-X' : centered rolling mean over X days
 			       - 'mean'	     : full time mean
+                               - 'instant'   : no time operation
 			wave - wave number: if == 0, return total. else passed to GetWavesXr()
 		OUPUTS:
 			v_bar - zonal mean meridional wind [v]
@@ -572,6 +573,8 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean',wave
 			dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
 		elif ref == 'mean':
 			dthdp = dthdp.mean(time)
+		elif ref == 'instant':
+			dthdp = dthdp
 	# now get wave component
 	if isinstance(wave,list):
 		vpTp = GetWavesXr(v,t,wave=-1).sel(k=wave).sum('k')
