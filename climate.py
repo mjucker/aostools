@@ -2811,6 +2811,14 @@ def AddColorbar(fig,axs,cf,shrink=0.95):
         '''
         return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
 #######################################################
+def AddPanelLabels(axs,xpos=-0.15,ypos=-0.15,fontsize='large'):
+	'''Add a), b), ... labels to each panel within a multipanel figure.
+	'''
+	from string import ascii_lowercase
+	for a,ax in enumerate(axs):
+	    ax.text(xpos,ypos,ascii_lowercase[a]+')',transform=ax.transAxes,fontsize=fontsize)
+	
+#######################################################
 def FindCoordNames(ds):
 	'''Find the actual dimension names in xr.Dataset or xr.DataArray
 	    which correspond to longitude, latitude, pressure
