@@ -2811,12 +2811,41 @@ def AddColorbar(fig,axs,cf,shrink=0.95):
         '''
         return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
 #######################################################
-def AddPanelLabels(axs,xpos=-0.15,ypos=-0.15,fontsize='large'):
+def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
+
+	INPUTS:
+	axs : axes object, typically from pyplot.subplots() or a FacetPlot
+	loc : semantic location:
+	       'lower left': left of and below axes, outside plot
+	       'upper left': upper left corner, inside plot
+	xpos: manually adjust position in x-direction. units are fraction of axis width. overwrites loc.
+	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
+        va  : manually adjust vertical alignment. overwrites loc.
+        ha  : manually adjust horizontal alignment. overwrites loc.
 	'''
+	from matplotlib.pyplot import Axes
+	from numpy import array
+	locations = {
+		'upper left' : {'xpos':0.01,'ypos':0.99,'va':'top','ha':'left'},
+		'lower left' : {'xpos':-0.15,'ypos':-0.15,'va':'bottom','ha':'left'},
+		'upper right': {'xpos':0.99,'ypos':0.99,'va':'top','ha':'right'},
+		'lower right': {'xpos':1.05,'ypos':-0.15,'va':'bottom','ha':'left'},
+		}
+	locs = locations[loc]
+	if xpos is not None:
+	    locs['xpos'] = xpos
+	if ypos is not None:
+	    locs['ypos'] = ypos
+	if va is not None:
+	    locs['va'] = va
+	if ha is not None:
+	    locs['ha'] = ha
+	if isinstance(axs,Axes):
+	    axs = array(axs)
 	from string import ascii_lowercase
-	for a,ax in enumerate(axs):
-	    ax.text(xpos,ypos,ascii_lowercase[a]+')',transform=ax.transAxes,fontsize=fontsize)
+	for a,ax in enumerate(axs.flatten()):
+	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
 	
 #######################################################
 def FindCoordNames(ds):
