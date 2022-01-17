@@ -2454,7 +2454,7 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 	"""
 	# shape
 	if lon == 'infer' or lat == 'infer':
-		dim_names = FindCoordNames(phi_or_u)
+		dim_names = FindCoordNames(sst)
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
