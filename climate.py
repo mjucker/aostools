@@ -531,7 +531,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	#
 	return v_bar,t_bar
 
-def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
+def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean',wave=0):
 	""" Computes the vertical eddy components of the residual circulation,
 		bar(v'Theta'/Theta_p).
 		Output units are [v_bar] = [v], [t_bar] = [v*p]
@@ -546,6 +546,8 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
 			ref  - how to treat dTheta/dp:
 			       - 'rolling-X' : centered rolling mean over X days
 			       - 'mean'	     : full time mean
+                               - 'instant'   : no time operation
+			wave - wave number: if == 0, return total. else passed to GetWavesXr()
 		OUPUTS:
 			v_bar - zonal mean meridional wind [v]
 			t_bar - zonal mean vertical eddy component <v'Theta'/Theta_p> [v*p]
@@ -565,14 +567,23 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean'):
 	dthdp = t_bar.differentiate(p,edge_order=2) # dthdp = d(theta_bar)/dp
 	dthdp = dthdp.where(dthdp != 0)
 	# time mean of d(theta_bar)/dp
-	if 'rolling' in ref:
-		r = int(ref.split('-')[-1])
-		dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
-	elif ref == 'mean':
-		dthdp = dthdp.mean(time)
-
-	vpTp  = (v - v_bar)*(t - t_bar)
-	t_bar = vpTp.mean(lon)/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
+	if time in dthdp.dims:
+		if 'rolling' in ref:
+			r = int(ref.split('-')[-1])
+			dthdp = dthdp.rolling(dim={time:r},min_periods=1,center=True).mean()
+		elif ref == 'mean':
+			dthdp = dthdp.mean(time)
+		elif ref == 'instant':
+			dthdp = dthdp
+	# now get wave component
+	if isinstance(wave,list):
+		vpTp = GetWavesXr(v,t,wave=-1).sel(k=wave).sum('k')
+	elif wave == 0:
+		vpTp = (v - v_bar)*(t - t_bar)
+		vpTp = vpTp.mean(lon)  # vpTp = bar(v'Th')
+	else:
+		vpTp = GetWavesXr(v,t,wave=wave) # vpTp = bar(v'Th'_{k=wave})
+	t_bar = vpTp/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
 	#
 	return v_bar,t_bar
 
@@ -915,7 +926,7 @@ def ComputeWstarXr(omega, temp, vcomp, pres='level', lon='lon', lat='lat', time=
 	return w_bar + R*vt_bar
 
 ##############################################################################################
-def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
+def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
@@ -933,7 +944,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	  t    - temperature, shape(time,p,lat,lon) [K]
 	  w    - pressure velocity, optional, shape(time,p,lat,lon) [hPa/s]
 	  do_ubar - compute shear and vorticity correction? optional
-	  wave - only include this wave number. all if <0, sum over waves if a list. optional
+	  wave - only include this wave number. total if == 0, all waves if <0, single wave if >0, sum over waves if a list. optional
 	OUTPUTS:
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -968,7 +979,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	v = GetAnomaly(v)
 	if isinstance(wave,list):
 		upvp = np.sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
-	elif wave<0:
+	elif wave == 0:
 		upvp = np.nanmean(u*v,axis=-1)
 	else:
 		upvp = GetWaves(u,v,wave=wave)
@@ -988,7 +999,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 		w = GetAnomaly(w) # w = w' [hPa/s]
 		if isinstance(wave,list):
 			w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
-		elif wave<0:
+		elif wave == 0:
 			w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
 		else:
 			w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
@@ -1015,11 +1026,11 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=-1):
 	return ep1_cart,ep2_cart,div1,div2
 
 ##############################################################################################
-def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',ref='mean',w=None,do_ubar=False):
+def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',ref='mean',w=None,do_ubar=False,wave=0):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
-		coordinates, i.e. do not include the geometric factor a*cos\phi.
+		coordinates, i.e. do not incluxde the geometric factor a*cos\phi.
 		Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
 		The divergence is in units of m/s/day, and therefore represents
 		the deceleration of the zonal wind. This is actually the quantity
@@ -1036,6 +1047,7 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	  ref  - method to use for dTheta/dp, used for ComputeVertEddy
 	  w    - pressure velocity, if not None, xarray.DataArray [hPa/s]
 	  do_ubar - compute shear and vorticity correction?
+	  wave - only include this wave number. total if == 0, all waves if <0, sum over waves if a list. optional
 	OUTPUTS (all xarray.DataArray):
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
@@ -1069,12 +1081,17 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	fhat = f - fhat # [1/s]
 	#
 	## compute thickness weighted heat flux [m.hPa/s]
-	vbar,vertEddy = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref) # vertEddy = bar(v'Th'/(dTh_bar/dp))
+	vbar,vertEddy = ComputeVertEddyXr(v,t,pres,p0,lon,time,ref,wave) # vertEddy = bar(v'Th'/(dTh_bar/dp))
 	#
 	## get zonal anomalies
-	u = u - u.mean(lon)
-	v = v - v.mean(lon)
-	upvp = (u*v).mean(lon)
+	if isinstance(wave,list):
+		upvp = GetWavesXr(u,v,wave=-1).sel(k=wave).sum('k')
+	elif wave == 0:
+		u = u - u.mean(lon)
+		v = v - v.mean(lon)
+		upvp = (u*v).mean(lon)
+	else:
+		upvp = GetWavesXr(u,v,wave=wave)
 	#
 	## compute the horizontal component
 	if do_ubar:
@@ -1088,8 +1105,13 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	#
 	ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
 	if w is not None:
-		w = w - w.mean(lon) # w = w' [hPa/s]
-		w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
+		if isinstance(wave,list):
+			w = GetWavesXr(u,w,wave=-1).sel(k=wave).sum('k')
+		elif wave == 0:
+			w = w - w.mean(lon) # w = w' [hPa/s]
+			w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
+		else:
+			w = GetWavesXr(u,w,wave=wave)
 		ep2_cart = ep2_cart - w # [m.hPa/s2]
 	#
 	#
@@ -1113,6 +1135,8 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	#
 	# make sure order is the same as input
 	new_order = [d for d in initial_order if d != lon]
+	if not isinstance(wave,list) and wave < 0:
+		new_order = ['k'] + new_order
 	# give the DataArrays their names
 	ep1_cart.name = 'ep1'
 	ep2_cart.name = 'ep2'
@@ -1460,7 +1484,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask),div3.where(mask)
 
 ##############################################################################################
-def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None):
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None,quiv_args=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
@@ -1483,6 +1507,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		scale	: keyword argument for quiver(). Smaller is longer [None]
 				  besides fixing the length, it is also usefull when calling this function inside a
 				   script without display as the only way to have a quiverkey on the plot.
+               quiv_args: further arguments passed to quiver plot.
 
 	OUTPUTS:
 	   Fphi*dx : x-component of properly scaled arrows. Units of [m3.inches]
@@ -1534,6 +1559,9 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 	#
 	# plot the arrows onto axis
 	quivArgs = {'angles':'uv','scale_units':'inches','pivot':pivot}
+	if quiv_args is not None:
+		for key in quiv_args.keys():
+			quivArgs[key] = quiv_args[key]
 	if scale is not None:
 		quivArgs['scale'] = scale
 	if newax:
@@ -1785,9 +1813,7 @@ def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=100
 			uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
 			Tz        - zonal mean temperature [K], dim pres x lat OR N x pres x lat
 			lat       - name of latitude [degrees]
-			pres      - name of
-				lat       - latitude [degrees]
-				pres      - pressure [hPa]pressure [hPa]
+			pres      - name of pressure [hPa]
 			component - option to only return one, two, or all of the components.
 						 Add a letter for each of the components 'A', 'B', 'C'.
 						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
@@ -2007,6 +2033,9 @@ def GetWaves(x,y=None,wave=-1,axis=-1,do_anomaly=False):
 					mask[-m,:]= 1
 					xym[m,:] = np.sum(xyf*mask,axis=0)
 					mask[:] = 0
+				# wavenumber 0 is total of all waves
+                                #  this makes more sense than the product of the zonal means
+				xym[0,:] = np.nansum(xym[1:,:],axis=0)
 				xym = AxRoll(xym,axis,invert=True)
 			else:
 				xym = xyf[wave,:]
@@ -2044,6 +2073,48 @@ def GetAnomaly(x,axis=-1):
 	#bring axis back to where it was
 	x = AxRoll(xt,axis,invert=True)
 	return x
+
+##############################################################################################
+def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
+	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
+
+		If y!=None, returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Dimension along which Fourier is performed is either gone (wave>=0) or has len(axis)/2+1 due to Fourier symmetry for real signals (wave<0).
+
+		If y=None and wave>=0, returns real space contribution of given wave mode. Output has same shape as input.
+		If y=None and wave<0, returns real space contributions for all waves. Output has additional first dimension corresponding to each wave.
+
+	INPUTS:
+		x	   - the array to decompose. xr.DataArray
+		y	   - second array if wanted. xr.DataArray
+		wave	   - which mode to extract. all if <0
+		dim	   - along which dimension of x (and y) to decompose
+		anomaly	   - if not None, name of dimension along which to compute anomaly first.
+	OUTPUTS:
+		xym	   - data. xr.DataArray
+	"""
+	from xarray import DataArray
+	if anomaly is not None:
+		x = x - x.mean(anomaly)
+		if y is not None:
+			y = y - y.mean(anomaly)
+	sdims = [d for d in x.dims if d != dim]
+	xstack = x.stack(stacked=sdims)
+	if y is None:
+		ystack=None
+	else:
+		ystack = y.stack(stacked=sdims)
+	gw = GetWaves(xstack,ystack,wave=wave,axis=xstack.get_axis_num(dim))
+	if y is None and wave >= 0: # result in real space
+		stackcoords = [xstack[d] for d in xstack.dims]
+	elif y is None and wave < 0: # additional first dimension of wave number
+		stackcoords = [('k',np.arange(gw.shape[0]))] + [xstack[d] for d in xstack.dims]
+	elif y is not None and wave >= 0: # original dimension is gone
+		stackcoords = [xstack.stacked]
+	elif y is not None and wave < 0: # additional dimension of wavenumber
+		stackcoords = [('k',np.arange(gw.shape[0])), xstack.stacked]
+	gwx = DataArray(gw,coords=stackcoords)
+	return gwx.unstack()
+                
 
 
 #######################################################
@@ -2246,9 +2317,9 @@ def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
 	"""
 	if lon_name == 'infer' or lat_name == 'infer':
 		dim_names = FindCoordNames(data)
-		if lon_name == 'infer':
+		if lon_name == 'infer' and 'lon' in dim_names.keys():
 			lon_name = dim_names['lon']
-		if lat_name == 'infer':
+		if lat_name == 'infer' and 'lat' in dim_names.keys():
 			lat_name = dim_names['lat']
 	if lat_name is not None and lat_name in data.coords:
 		if data[lat_name][0] > data[lat_name][-1]:
@@ -2429,9 +2500,9 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
+def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 	"""
-		Produce ENSO index timeseries from SST according to Technical Notes
+		Produce variability index timeseries from SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
 
 		INPUTS:
@@ -2439,18 +2510,19 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 			lon:  name of longitude dimension. Has to be in [0,360]. If 'infer', try to guess.
 			lat:  name of latitude dimension. Has to be increasing. If 'infer', try to guess.
 			time: name of time dimension. If 'infer', try to guess.
-			avg:  size of rolling window for rolling time average.
-			nino: which Nino index to compute. Choices are
-					'1+2','3','4','3.4','oni','tni','modiki'
+			avg:  size of rolling window for rolling time average [months].
+			index: which index to compute. Choices are
+				   Nino: '1+2','3','4','3.4','oni','tni','modiki'
 					'oni' is the same as '3.4', as they only
-					   distinguish themselves via the rolling
-					   average period (3 months for oni,
-					   5 months for 3.4)
+					 distinguish themselves via the rolling
+					 average period (3 months for oni,
+					 5 months for 3.4)
                                         'modiki' is the same as 'tni'
+                                    IOD: 'dmi' is Indian Ocean Dipole
 
 		OUTPUTS:
-			sst: spatially averaged over respective Nino index domain
-				  note that no running means are performed.
+			sst: spatially averaged over respective index domain
+				  note that output is monthly
 	"""
 	# shape
 	if lon == 'infer' or lat == 'infer':
@@ -2459,18 +2531,21 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 		lon = dim_names['lon']
 	if lat == 'infer':
 		lat = dim_names['lat']
-	ninos = {
+	indList = {
 		'1+2' : {lon:slice(270,280),lat:slice(-10,0)},
 		'3'   : {lon:slice(210,270),lat:slice(-5,5)},
 		'4'   : {lon:slice(160,210),lat:slice(-5,5)},
 		'3.4' : {lon:slice(190,240),lat:slice(-5,5)},
 		'oni' : {lon:slice(190,240),lat:slice(-5,5)},
+                'tni' : '1+2std - 4std',
+                'modiki':'tni',
+                'dmi' : 'dmi1 - dmi2',
+                'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
+                'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)}
 	}
-	possible_ninos = list(ninos.keys())+['tni']
-	if nino == 'modiki':
-		nino = 'tni'
-	if nino not in possible_ninos:
-		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(nino,', '.join(possible_ninos)))
+	possible_ninos = list(indList.keys())
+	if index not in possible_ninos:
+		raise ValueError('Nino type {0} not recognised. Possible choices are {1}'.format(index,', '.join(possible_ninos)))
 	lon_name = None
 	lat_name = None
 	if sst[lon].min() < 0 or sst[lon].max() <= 180:
@@ -2478,24 +2553,47 @@ def Nino(sst, lon='infer', lat='infer', time='time', avg=5, nino='3.4'):
 	if sst[lat][0] > sst[lat][-1]:
 		lat_name = lat
 	if lon_name is not None or lat_name is not None:
-		print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
+		#print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
 		sst = StandardGrid(sst,lon_name,lat_name)
 
-	def NinoAvg(sst,nino,time,avg):
-		ssta = sst.sel(ninos[nino]).mean(dim=[lon,lat])
+	sst = sst.resample({time:'1M'}).mean()
+
+	def NinoAvg(sst,nino,time,avg,std=True):
+		ssta = sst.sel(indList[nino]).mean(dim=[lon,lat])
 		sstc = ssta.groupby('.'.join([time,'month'])).mean(dim=time)
 		ssta = ssta.groupby('.'.join([time,'month'])) - sstc
 		if avg is not None:
+			ssta = ssta.load()
 			ssta = ssta.rolling({time:avg},min_periods=1).mean()
-		return ssta/ssta.std(dim=time)
+		if std:
+			ssta = ssta/ssta.std(dim=time)
+		return ssta
 
-	if nino == 'tni':
-		n12 = NinoAvg(sst,'1+2',time,None)
-		n4  = NinoAvg(sst,'4',time,None)
-		tni = (n12-n4).rolling({time:avg},min_periods=1).mean()
-		return tni/tni.std(dim=time)
+	combined = False
+	if isinstance(indList[index],str):
+		comb = indList[index]
+		if '-' in comb:
+			combined = True
+		else:
+			index = comb
+			combined = False
+
+	if combined:
+		ind1 = comb.split('-')[0].replace(' ','')
+		ind2 = comb.split('-')[1].replace(' ','')
+		std = 'std' in ind1
+		ind1 = NinoAvg(sst,ind1.replace('std',''),time,None,std)
+		std = 'std' in ind2
+		ind2 = NinoAvg(sst,ind2.replace('std',''),time,None,std)
+		indx = (ind1-ind2).load()
+		indx = indx.rolling({time:avg},min_periods=1).mean()
+		out  = (indx)/indx.std(dim=time)
+		out.name = index.upper()
+		return out
 	else:
-		return NinoAvg(sst,nino,time,avg)
+		out = NinoAvg(sst,index,time,avg)
+		out.name = index.upper()
+		return out
 
 
 #######################################################
@@ -2564,7 +2662,7 @@ def StackArray(x,dim):
 	   stacked: same as x, but stacked
 	'''
 	dims = []
-	for d in x.coords:
+	for d in x.dims:
 		if d != dim:
 			dims.append(d)
 	return x.stack(stacked=dims)
@@ -2586,43 +2684,71 @@ def ComputeStat(i,sx,y,sy,test):
 			_,ploc = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
 		elif test == 'T':
 			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
+		elif test == 'sign': # not really a sig test, just checking sign agreement
+                        # note that here a high p-value means significant, as it means
+                        #  that a lot of members have the same sign
+			lenx = len(sx.isel(stacked=i))
+			if y is None: # check sx for same sign
+				posx = np.sum(sx.isel(stacked=i) > 0)
+				ploc = max(posx,lenx-posx)/lenx
+			elif isinstance(y,float) or isinstance(y,int): # check sx for sign of y
+				samex = np.sum( np.sign(sx.isel(stacked=i)) == np.sign(y) )
+				ploc  = samex/lenx
+			else: # check two ensembles for same sign
+				# ensembles are not 1-by-1, so we can't check sign along dimension
+				lenx = len(sx.isel(stacked=i))
+				posx = np.sum(sx.isel(stacked=i) > 0)/lenx
+				leny = len(sy.isel(stacked=i))
+				posy = np.sum(sy.isel(stacked=i) > 0)/leny
+				ploc = min(posx,posy)/max(posx,posy)
 	return ploc
 
-def StatTest(x,y,dim,test='KS',parallel=False):
+def StatTest(x,y,test,dim=None,parallel=False):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
 
 	   INPUTS:
 	      x	 : xr.DataArray for testing.
-	      y	 : xr.DataArray for testing against.
+	      y	 : xr.DataArray or scalar for testing against. Or None for single-ensemble sign test.
 	      dim: dimension name along which to perform the test.
 	      test:which test to use:
 		    'KS' -> Kolmogorov-Smirnov
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
-			'T'  -> T-test 1 sample with y=mean
+		    'T'  -> T-test 1 sample with y=mean
+                    'sign'->test against sign only. 
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimensionas x,y except `dim`.
 	'''
 	from xarray import DataArray
+	if dim is None or len(x.dims) == 1:
+		sx = x.expand_dims(stacked=[0])
+		parallel = False
+	else:
+		sx = StackArray(x,dim)
 	if parallel:
 		import parmap
-	sx = StackArray(x,dim)
+	nspace = len(sx.stacked)
 	if isinstance(y,DataArray):
-		sy = StackArray(y,dim)
+		if dim is None or len(y.dims) == 1:
+			sy = y.expand_dims(stacked=[0])
+		else:
+			sy = StackArray(y,dim)
 	else:
 		sy = None
-	nspace = len(sx.stacked)
 	if parallel:
 		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test)
 	else:
-		pval = np.zeros_like(sx.stacked)
+		pval = np.zeros(sx.stacked.shape)
 		for i in range(nspace):
-			pval[i] = ComputeStat(isx,y,sy,test)
-	pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+			pval[i] = ComputeStat(i,sx,y,sy,test)
+	if nspace > 1:
+		pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
+	else:
+		pvalx = pval[0]
 	return pvalx
 
 #######################################################
@@ -2683,7 +2809,44 @@ def AddColorbar(fig,axs,cf,shrink=0.95):
           OUTPUTS:
              cbar: colorbar object.
         '''
-        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=0.95)
+        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
+#######################################################
+def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
+	'''Add a), b), ... labels to each panel within a multipanel figure.
+
+	INPUTS:
+	axs : axes object, typically from pyplot.subplots() or a FacetPlot
+	loc : semantic location:
+	       'lower left': left of and below axes, outside plot
+	       'upper left': upper left corner, inside plot
+	xpos: manually adjust position in x-direction. units are fraction of axis width. overwrites loc.
+	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
+        va  : manually adjust vertical alignment. overwrites loc.
+        ha  : manually adjust horizontal alignment. overwrites loc.
+	'''
+	from matplotlib.pyplot import Axes
+	from numpy import array
+	locations = {
+		'upper left' : {'xpos':0.01,'ypos':0.99,'va':'top','ha':'left'},
+		'lower left' : {'xpos':-0.15,'ypos':-0.15,'va':'bottom','ha':'left'},
+		'upper right': {'xpos':0.99,'ypos':0.99,'va':'top','ha':'right'},
+		'lower right': {'xpos':1.05,'ypos':-0.15,'va':'bottom','ha':'left'},
+		}
+	locs = locations[loc]
+	if xpos is not None:
+	    locs['xpos'] = xpos
+	if ypos is not None:
+	    locs['ypos'] = ypos
+	if va is not None:
+	    locs['va'] = va
+	if ha is not None:
+	    locs['ha'] = ha
+	if isinstance(axs,Axes):
+	    axs = array(axs)
+	from string import ascii_lowercase
+	for a,ax in enumerate(axs.flatten()):
+	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
+	
 #######################################################
 def FindCoordNames(ds):
 	'''Find the actual dimension names in xr.Dataset or xr.DataArray
@@ -2701,11 +2864,11 @@ def FindCoordNames(ds):
 	ldims = [d.lower() for d in odims]
 	dim_names = {}
 	# check for longitude
-	for lon in ['longitude','lon','xt_ocean']:
+	for lon in ['longitude','lon','xt_ocean','lon_sub1']:
 		if lon in ldims:
 			indx = ldims.index(lon)
 			dim_names['lon'] = odims[indx]
-	for lat in ['latitude','lat','yt_ocean']:
+	for lat in ['latitude','lat','yt_ocean','lat_sub1']:
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
