@@ -2114,7 +2114,7 @@ def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
 		stackcoords = [('k',np.arange(gw.shape[0])), xstack.stacked]
 	gwx = DataArray(gw,coords=stackcoords)
 	return gwx.unstack()
-                
+
 
 
 #######################################################
@@ -2717,7 +2717,7 @@ def StatTest(x,y,test,dim=None,parallel=False):
 		    'MW' -> Mann-Whitney
 		    'WC' -> Wilcoxon
 		    'T'  -> T-test 1 sample with y=mean
-                    'sign'->test against sign only. 
+                    'sign'->test against sign only.
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
@@ -2850,7 +2850,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	from string import ascii_lowercase
 	for a,ax in enumerate(axs.flatten()):
 	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
-	
+
 #######################################################
 def FindCoordNames(ds):
 	'''Find the actual dimension names in xr.Dataset or xr.DataArray
@@ -2881,3 +2881,36 @@ def FindCoordNames(ds):
 			indx = ldims.index(plev)
 			dim_names['pres'] = odims[indx]
 	return dim_names
+
+#######################################################
+def CloseGlobe(da,lon='infer',copy_all=True):
+	'''Close global data cyclicly in longitude to avoid whitespace in stereographic projections.
+		This code adapted from code provided by Rishav Goyal.
+
+		INPUTS:
+			da:    xarray.DataArray
+			lon:   name of longitude dimension, or 'infer' to automatically find it.
+			copy_all: also retain coordinates which are not dimensions of da
+
+		OUTPUS:
+			data:  data with 1 additional longitude data point.
+	'''
+	import xarray as xr
+	from cartopy.util import add_cyclic_point as cycpt
+	if lon == 'infer':
+		dim_names = FindCoordNames(da)
+		lon = dim_names['lon']
+	p1,lon1     = cycpt(da , coord=da[lon])
+	coords = []
+	for coord in da.dims:
+	    if coord == 'lon':
+	        coords.append(('lon',lon1))
+	    else:
+	        coords.append((coord,da[coord].data))
+	data = xr.DataArray(p1,coords=coords,name=da.name)
+	for coord in da.coords:
+		if coord in data.coords:
+			data[coord].attrs = da[coord].attrs
+		elif copy_all:
+			data[coord] = da[coord]
+	return data
