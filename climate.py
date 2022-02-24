@@ -2795,21 +2795,25 @@ def LogPlot(ax,log=True,invert=True,format=True,ylim=None):
 		ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
 #######################################################
-def AddColorbar(fig,axs,cf,shrink=0.95):
-        '''Add a common colorbar to a FacetPlot.
-            Note that this assumes all panels have been plotted with the same
-            color range and levels.
+def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
+	'''Add a common colorbar to a FacetPlot.
+	    Note that this assumes all panels have been plotted with the same
+	    color range and levels.
 
-          INPUTS:
-             fig   : figure object containing facet plot.
-             axs   : list of all axes in the facet plot.
-             cf    : image object which contains the values.
-                    e.g. cf = plt.contourf(...)
-             shrink: factor to make colorbar smaller.
-          OUTPUTS:
-             cbar: colorbar object.
-        '''
-        return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
+	  INPUTS:
+	     fig   : figure object containing facet plot.
+	     axs   : list of all axes in the facet plot.
+	     cf	   : image object which contains the values.
+		    e.g. cf = plt.contourf(...)
+	     shrink: factor to make colorbar smaller.
+	     cbar_args: arguments to be passed to pyplot.colorbar
+	  OUTPUTS:
+	     cbar: colorbar object.
+	'''
+	if cbar_args is None:
+		return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
+	else:
+		return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink, **cbar_args)
 #######################################################
 def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
