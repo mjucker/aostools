@@ -484,7 +484,7 @@ def update_progress(progress,barLength=10,info=None):
 	sys.stdout.write(text)
 	sys.stdout.flush()
 #
-def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
+def ComputeVertEddy(v,t,p,p0=1e3,wave=0):
 	""" Computes the vertical eddy components of the residual circulation,
 		bar(v'Theta'/Theta_p). Either in real space, or a given wave number.
 		Dimensions must be time x pres x lat x lon.
@@ -519,14 +519,16 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=-1):
 	# time mean of d(theta_bar)/dp
 	dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
 	# now get wave component
-	if isinstance(wave,list):
-		t = np.sum(GetWaves(v,t,wave=-1,do_anomaly=True)[:,:,:,wave],axis=-1)
-	elif wave < 0:
+	#if isinstance(wave,list):
+	#	t = np.sum(GetWaves(v,t,wave=-1,do_anomaly=True)[:,:,:,wave],axis=-1)
+	if wave == 0:
 		v = GetAnomaly(v) # v = v'
 		t = GetAnomaly(t) # t = t'
 		t = np.nanmean(v*t,axis=-1) # t = bar(v'Th')
 	else:
 		t = GetWaves(v,t,wave=wave,do_anomaly=True) # t = bar(v'Th'_{k=wave})
+		if wave < 0:
+			dthdp = np.expand_dims(dthdp,-1)
 	t_bar = t/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
 	#
 	return v_bar,t_bar
@@ -962,6 +964,8 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	f     = 2*Omega*sinlat
 	pp0  = (p0/pres[np.newaxis,:,np.newaxis])**kappa
 	dp    = np.gradient(pres)[np.newaxis,:,np.newaxis]
+	if wave < 0:
+		dp = np.expand_dims(dp,-1)
 	#
 	# absolute vorticity
 	if do_ubar:
@@ -989,6 +993,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 		shear = np.gradient(ubar,edge_order=2)[1]/dp # [m/s.hPa]
 	else:
 		shear = 0.
+	print(upvp.shape,vertEddy.shape)
 	ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
 	#
 	## compute vertical component of EP flux.
@@ -997,9 +1002,9 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
 	if w is not None:
 		w = GetAnomaly(w) # w = w' [hPa/s]
-		if isinstance(wave,list):
-			w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
-		elif wave == 0:
+		#if isinstance(wave,list):
+		#	w = sum(GetWaves(u,w,wave=wave)[:,:,:,wave],-1)
+		if wave == 0:
 			w = np.nanmean(w*u,axis=-1) # w = bar(u'w') [m.hPa/s2]
 		else:
 			w = GetWaves(u,w,wave=wave) # w = bar(u'w') [m.hPa/s2]
@@ -1012,7 +1017,10 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	#    where a*cosphi comes from using cartesian, and cosphi from the derivative
 	# With some algebra, we get
 	#  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
-	div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
+	if wave < 1:
+		div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-2]/dphi - 2*sinlat*ep1_cart
+	else:
+		div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
 	# Now, we want acceleration, which is div(F)/a.cosphi [m/s2]
 	div1 = R*div1 # [m/s2]
 	#
