@@ -965,7 +965,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	pp0  = (p0/pres[np.newaxis,:,np.newaxis])**kappa
 	dp    = np.gradient(pres)[np.newaxis,:,np.newaxis]
 	if wave < 0:
-		dp = np.expand_dims(dp,-1)
+		dp   = np.expand_dims(dp  ,-1)
 	#
 	# absolute vorticity
 	if do_ubar:
@@ -975,25 +975,35 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 		fhat = 0.
 	fhat = f - fhat # [1/s]
 	#
+	# add wavenumber dimension if needed
+	if wave < 0:
+		fhat = np.expand_dims(fhat,-1)
+		coslat = np.expand_dims(coslat,-1)
+		sinlat = np.expand_dims(sinlat,-1)
+		dphi = np.expand_dims(dphi,-1)
+		R = np.expand_dims(R,-1)
+	#
 	## compute thickness weighted heat flux [m.hPa/s]
 	vbar,vertEddy = ComputeVertEddy(v,t,pres,p0,wave) # vertEddy = bar(v'Th'/(dTh_bar/dp))
 	#
 	## get zonal anomalies
 	u = GetAnomaly(u)
 	v = GetAnomaly(v)
-	if isinstance(wave,list):
-		upvp = np.sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
-	elif wave == 0:
+	#if isinstance(wave,list):
+	#	upvp = np.sum(GetWaves(u,v,wave=-1)[:,:,:,wave],-1)
+	if wave == 0:
 		upvp = np.nanmean(u*v,axis=-1)
 	else:
 		upvp = GetWaves(u,v,wave=wave)
 	#
 	## compute the horizontal component
 	if do_ubar:
-		shear = np.gradient(ubar,edge_order=2)[1]/dp # [m/s.hPa]
+		grad_u= np.gradient(ubar,edge_order=2)[1]
+		if wave < 0:
+			grad_u = np.expand_dims(grad_u,-1)
+		shear = grad_u/dp # [m/s.hPa]
 	else:
 		shear = 0.
-	print(upvp.shape,vertEddy.shape)
 	ep1_cart = -upvp + shear*vertEddy # [m2/s2 + m/s.hPa*m.hPa/s] = [m2/s2]
 	#
 	## compute vertical component of EP flux.
@@ -1017,7 +1027,7 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	#    where a*cosphi comes from using cartesian, and cosphi from the derivative
 	# With some algebra, we get
 	#  div1 = cosphi d/d phi[ep1_cart] - 2 sinphi*ep1_cart
-	if wave < 1:
+	if wave < 0:
 		div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-2]/dphi - 2*sinlat*ep1_cart
 	else:
 		div1 = coslat*np.gradient(ep1_cart,edge_order=2)[-1]/dphi - 2*sinlat*ep1_cart
