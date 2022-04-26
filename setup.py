@@ -6,7 +6,7 @@ def read(fname):
 	return open(os.path.join(os.path.dirname(__file__),fname)).read()
 
 setup(name='aostools',
-      version='2.3.2',
+      version='2.4',
       description='Helper functions for scientific postprocessing and analysis of netCDF data',
       long_description=read('readme_pypi'),
       keywords='atmospheric oceanic science netcdf analysis tools',
