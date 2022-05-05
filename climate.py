@@ -2918,11 +2918,11 @@ def CloseGlobe(da,lon='infer',copy_all=True):
 	if lon == 'infer':
 		dim_names = FindCoordNames(da)
 		lon = dim_names['lon']
-	p1,lon1     = cycpt(da , coord=da[lon])
+	p1,lon1 = cycpt(da , coord=da[lon])
 	coords = []
 	for coord in da.dims:
-	    if coord == 'lon':
-	        coords.append(('lon',lon1))
+	    if coord == lon:
+	        coords.append((lon,lon1))
 	    else:
 	        coords.append((coord,da[coord].data))
 	data = xr.DataArray(p1,coords=coords,name=da.name)
