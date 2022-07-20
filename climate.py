@@ -2901,12 +2901,12 @@ def FindCoordNames(ds):
 	return dim_names
 
 #######################################################
-def CloseGlobe(da,lon='infer',copy_all=True):
+def CloseGlobe(ds,lon='infer',copy_all=True):
 	'''Close global data cyclicly in longitude to avoid whitespace in stereographic projections.
 		This code adapted from code provided by Rishav Goyal.
 
 		INPUTS:
-			da:    xarray.DataArray
+			ds:    xarray.DataArray or xarray.Dataset
 			lon:   name of longitude dimension, or 'infer' to automatically find it.
 			copy_all: also retain coordinates which are not dimensions of da
 
@@ -2916,19 +2916,32 @@ def CloseGlobe(da,lon='infer',copy_all=True):
 	import xarray as xr
 	from cartopy.util import add_cyclic_point as cycpt
 	if lon == 'infer':
-		dim_names = FindCoordNames(da)
+		dim_names = FindCoordNames(ds)
 		lon = dim_names['lon']
-	p1,lon1 = cycpt(da , coord=da[lon])
-	coords = []
-	for coord in da.dims:
-	    if coord == lon:
-	        coords.append((lon,lon1))
-	    else:
-	        coords.append((coord,da[coord].data))
-	data = xr.DataArray(p1,coords=coords,name=da.name)
-	for coord in da.coords:
-		if coord in data.coords:
-			data[coord].attrs = da[coord].attrs
-		elif copy_all:
-			data[coord] = da[coord]
-	return data
+	if isinstance(ds,xr.Dataset):
+		arrays = list(ds.data_vars.keys())
+		is_ds = True
+	else:
+		arrays = [ds.name]
+		is_ds = False
+	datas = []
+	for array in arrays:
+		if is_ds:
+			da = ds[array]
+		else:
+			da = ds
+		p1,lon1 = cycpt(da , coord=da[lon])
+		coords = []
+		for coord in da.dims:
+			if coord == lon:
+				coords.append((lon,lon1))
+			else:
+				coords.append((coord,da[coord].data))
+		data = xr.DataArray(p1,coords=coords,name=da.name)
+		for coord in da.coords:
+			if coord in data.coords:
+				data[coord].attrs = da[coord].attrs
+			elif copy_all:
+				data[coord] = da[coord]
+		datas.append(data)
+	return xr.merge(datas)
