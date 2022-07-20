@@ -13,9 +13,47 @@ p0 = 1e3 # [hPa]
 p0_Pa = 1e5 # [Pa]
 
 def f(lat):
+    ''' Compute Coriolis parameter f = 2*Omega*sin(lat)
+
+    INPUTS:
+      lat:  latitude in degrees. Either numpy or xarray array
+    OUTPUTS:
+      f:    Coriolis parameter. Either numpy or xarray array
+    '''
     from numpy import sin,deg2rad
     return 2*Omega*sin(deg2rad(lat))
 
+def beta(lat,u=None):
+    ''' Compute meridional derivative of Coriolis parameter, i.e. beta = 2*Omega*cos(lat)/a0.
+          If u is not None, returns beta = 2*Omega*cos(lat)/a0 - u_yy
+          If u is not None, it has to be an xarray.DataArray.
+
+    INPUTS:
+      lat:  latitude in degrees. Either numpy or xarray array
+      u:    None or meridonal wind as xarray dataarray. If
+    OUTPUTS:
+      beta:   beta parameter. Either numpy or xarray array depending on input.
+    '''
+    from numpy import cos,deg2rad
+    beta = 2*Omega*cos(deg2rad(lat))/a0
+    if u is None:
+        return beta
+    else:
+        lats = lat.name
+        # uyy = d_phi(1/acosphi*d_phi(u*cosphi))/a0
+        uy = deg2rad((u*coslat(lat))).differentiate(lats,edge_order=2)
+        uyy = deg2rad((uy/coslat(lat)/a0).differentiate(lats,edge_order=2))/a0
+        return beta - uyy
+
+
 def coslat(lat):
+    '''Compute cosine of latitude from degrees.
+    '''
     from numpy import cos,deg2rad
     return cos(deg2rad(lat))
+
+def sinlat(lat):
+    '''Compute sine of latitude from degrees.
+    '''
+    from numpy import sin,deg2rad
+    return sin(deg2rad(lat))
