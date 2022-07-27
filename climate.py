@@ -2704,8 +2704,11 @@ def ComputeStat(i,sx,y,sy,test):
 	'''
 	from xarray import DataArray
 	from scipy import stats
-	if isinstance(y,DataArray) and (np.all(sx.isel(stacked=i) == sy.isel(stacked=i))):
-		ploc = 0.0
+	# if sx and sy are the same, null hypothesis of the two being distinct
+	#  should be rejected at all levels, i.e. p-value of them being
+	#  equal should be 100%
+	if isinstance(y,DataArray) and sx.shape == sy.shape and (np.all(sx.isel(stacked=i) == sy.isel(stacked=i))):
+		ploc = 1.0
 	else:
 		if test == 'KS':
 			_,ploc = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
@@ -2752,7 +2755,7 @@ def StatTest(x,y,test,dim=None,parallel=False):
 		  parallel: Run the test in parallel? Requires the parmap package.
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
-		     Same dimensionas x,y except `dim`.
+		     Same dimension as x,y except `dim`.
 	'''
 	from xarray import DataArray
 	if dim is None or len(x.dims) == 1:
@@ -2958,3 +2961,20 @@ def CloseGlobe(ds,lon='infer',copy_all=True):
 				data[coord] = da[coord]
 		datas.append(data)
 	return xr.merge(datas)
+
+#######################################################
+def Regress(x,y,dim):
+	'''Compute regression of x onto y along dimension.
+	 	Assumes x and y are xarray.DataArrays.
+
+		INPUTS:
+			x   : first array, which is regressed onto y
+			y   : second array, onto which x is regressed
+			dim : dimension along which regression should be performed
+
+		OUTPUTS:
+			reg : regression of x onto y, in same units as x
+	'''
+	from xarray import cov
+	return cov(x,y,dim)/y.std(dim)
+	
