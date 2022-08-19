@@ -2654,11 +2654,13 @@ def Anomaly(da,groupby='time.dayofyear',climate=None):
 
 	INPUTS:
 	   da	  : xarray.DataArray or xarray.Dataset from which to compute anomalies.
-	   groupby: defines frequency for anomalies.
+	   groupby: defines frequency for anomalies. If None, return anomalies with respect to total average (useful if only one-dimensional).
 	   climate: define period for baseline climatology. All time steps if None.
 	OUTPUTS:
 	   da	  : input array as anomalies with respect to `groupby`
 	'''
+	if groupby is None: # only one dimension
+		return da - da.mean()
 	time_name = groupby.split('.')[0]
 	if climate is None:
 		clim_filtr = {time_name : slice(da[time_name][0],da[time_name][-1])}
@@ -2674,15 +2676,18 @@ def Standardize(da,groupby='time.dayofyear',std=None,climate=None):
 
           INPUTS:
             da     : xarray.DataArray or xarray.Dataset to standardize
-            groupby: frequency/basis on which to compute anomalies and standardize.
+            groupby: frequency/basis on which to compute anomalies and standardize. If None, standardize over all dimensions (useful if only one dimensional).
             std    : use this standard deviation to standardize instead of da's standard deviation
-            climate: use this time period to compute the baseline climatology. Entire time period if None.
-          OUTPUTS:
-            da     : standarized da
+ 	    climate: use this time period to compute the baseline climatology. Entire time period if None.
+	  OUTPUTS:
+	    da	   : standarized da
 	'''
-	# from xarray import apply_ufunc
-
-	time_name = groupby.split('.')[0]
+	if groupby is None: # only one dimension
+		return (da - da.mean())/da.std()
+	if '.' in groupby:
+		time_name = groupby.split('.')[0]
+	else:
+		time_name = groupby
 	if climate is None:
 		clim_filtr = {time_name : slice(da[time_name][0],da[time_name][-1])}
 	else:
