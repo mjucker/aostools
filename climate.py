@@ -2649,19 +2649,26 @@ def RollingMeanStd(x,mean_std,r=31,dim='time'):
 	return xc
 
 #######################################################
-def Anomaly(da,groupby='time.dayofyear'):
+def Anomaly(da,groupby='time.dayofyear',climate=None):
         '''Compute anomaly of xr.DataArray on frequency given by groupby.
 
         INPUTS:
            da     : xarray.DataArray or xarray.Dataset from which to compute anomalies.
            groupby: defines frequency for anomalies.
+           climate: define period for baseline climatology. All time steps if None.
         OUTPUTS:
            da     : input array as anomalies with respect to `groupby`
         '''
-        return da.groupby(groupby) - da.groupby(groupby).mean()
+        time_name = groupby.split('.')[0]
+	if climate is None:
+		clim_filtr = {time_name : slice(da[time_name][0],da[time_name][-1])}
+	else:
+		clim_filtr = {time_name: slice(str(climate[0]),str(climate[1]))}
+	climatology_mean = da.sel(clim_filtr).groupby(groupby).mean(time_name)
+        return da.groupby(groupby) - climatology_mean
 
 #######################################################
-def Standardize(da,groupby='time.dayofyear',std=None):
+def Standardize(da,groupby='time.dayofyear',std=None,climate=None):
 	'''Standardize xr.DataArray on a frequency given by groupby.
 		This is from http://xarray.pydata.org/en/stable/examples/weather-data.html
 
@@ -2669,15 +2676,20 @@ def Standardize(da,groupby='time.dayofyear',std=None):
             da     : xarray.DataArray or xarray.Dataset to standardize
             groupby: frequency/basis on which to compute anomalies and standardize.
             std    : use this standard deviation to standardize instead of da's standard deviation
+            climate: use this time period to compute the baseline climatology. Entire time period if None.
           OUTPUTS:
             da     : standarized da
 	'''
 	# from xarray import apply_ufunc
 
 	time_name = groupby.split('.')[0]
-	climatology_mean = da.groupby(groupby).mean(time_name)
+	if climate is None:
+		clim_filtr = {time_name : slice(da[time_name][0],da[time_name][-1])}
+	else:
+		clim_filtr = {time_name: slice(str(climate[0]),str(climate[1]))}
+	climatology_mean = da.sel(clim_filtr).groupby(groupby).mean(time_name)
 	if std is None:
-		climatology_std = da.groupby(groupby).std(time_name)
+		climatology_std = da.sel(clim_filtr).groupby(groupby).std(time_name)
 	else:
 		climatology_std = std
 	stand_anomalies = (da.groupby(groupby) - climatology_mean).groupby(groupby)/climatology_std
@@ -2959,8 +2971,12 @@ def CloseGlobe(ds,lon='infer',copy_all=True):
 				data[coord].attrs = da[coord].attrs
 			elif copy_all:
 				data[coord] = da[coord]
-		datas.append(data)
-	return xr.merge(datas)
+		if is_ds:
+			datas.append(data)
+	if is_ds:
+		return xr.merge(datas)
+	else:
+		return data
 
 #######################################################
 def Regress(x,y,dim):
