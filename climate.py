@@ -3134,7 +3134,7 @@ def PotentialTemperature(t,p,p0=1e3):
 
 #######################################################
 def PotentialVorticity(u,v,t,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
-    '''Computes potential vorticity -g*(zeta + f)theta_p
+    '''Computes potential vorticity -g*(zeta + f)theta_p. Pressure is assumed in hPa.
     
      INPUTS:
         u     : zonal wind. xarray.DataArray
@@ -3143,7 +3143,7 @@ def PotentialVorticity(u,v,t,use_windspharm=False,lon='infer',lat='infer',pres='
         use_windspharm: whether or not to use windspharm to compute vorticity
         lon   : name of longitude coordinate. Guessed if 'infer'
         lat   : name of latitude coordinate. Guessed if 'infer'
-        pres  : name of vertical coordinate. Guessed (assuming pressure) if 'infer'
+        pres  : name of pressure coordinate [hPa]. Guessed if 'infer'
   
      OUTPUT:
         potential vorticity. xarray.DataArray
@@ -3157,7 +3157,7 @@ def PotentialVorticity(u,v,t,use_windspharm=False,lon='infer',lat='infer',pres='
         dim_names = FindCoordNames(u)
         pres = dim_names['pres']
     theta = PotentialTemperature(t,t[pres])
-    dtheta = theta.differentiate(pres,edge_order=2)
+    dtheta = theta.differentiate(pres,edge_order=2)*0.01
     return -g*vort*dtheta
 
 #######################################################
