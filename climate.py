@@ -2400,7 +2400,7 @@ def ComputeRossbyWaveSource(u,v):
 			v : meridional wind [m/s]
 
 		OUTPUTS:
-			S : Rossby Wave Source []
+			S : Rossby Wave Source [1/s2]
 	"""
 	from windspharm.xarray import VectorWind
 	# Create a VectorWind instance to handle the computations.
@@ -3081,3 +3081,109 @@ def DetectEvents(ds,thresh,sep=20,period=1,time='time',kind='auto'):
     options = {'max':'above','min':'below'}
     outx.attrs['method'] = 'individual {0}-day periods of {4} {1} {2}. Events are considered the same if spaced by less than {3} days'.format(period,options[kind],thresh,sep,ds.name)
     return outx 
+
+#######################################################
+def Vorticity(u,v,use_windspharm=False,lon='infer',lat='infer'):
+    '''Compute relative vorticity zeta = v_x - u_y on the sphere.
+    
+     INPUTS:
+        u     : zonal wind. xarray.DataArray
+        v     : meridional wind. xarray.DataArray
+        use_windspharm: whether or not to use windspharm to compute vorticity
+        lon   : name of longitude coordinate. Guessed if 'infer'
+        lat   : name of latitude coordinate. Guessed if 'infer'
+
+     OUTPUT:
+        relative vorticity [1/s]
+    '''
+    if use_windspharm:
+        from windspharm.xarray import VectorWind
+        wv = VectorWind(u,v)
+        return wv.vorticity()
+    else:
+        from .constants import a0,coslat
+        if lon == 'infer' or lat == 'infer':
+            dim_names = FindCoordNames(u)
+            if lon == 'infer':
+                lon = dim_names['lon']
+            if lat == 'infer':
+                lat = dim_names['lat']
+        one_over_a = 1/a0
+        one_over_cosphi = 1/coslat(u[lat])
+        dxv = one_over_a*one_over_cosphi*v.differentiate(lon,edge_order=2)
+        dyu = one_over_a*                u.differentiate(lat,edge_order=2)
+        vort = dxv - dyu
+        vort.attrs['units'] = '1/s'
+        vort.name = 'relative_vorticity'
+        return vort*180/np.pi        
+
+#######################################################
+def PotentialTemperature(t,p,p0=1e3):
+    '''Compute potential temperature theta = T*(p0/p)**kappa
+   
+     INPUTS:
+        t : temperature in  Kelvins
+        p : pressure in same units as p0 [defaults to hPa]
+        p0: reference pressure [1000hPa]
+
+     OUTPUTS:
+        potential temperature in Kelvins
+    '''
+    from .constants import kappa
+    return t*(p0/p)**kappa
+
+#######################################################
+def PotentialVorticity(u,v,t,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
+    '''Computes potential vorticity -g*(zeta + f)theta_p
+    
+     INPUTS:
+        u     : zonal wind. xarray.DataArray
+        v     : meridional wind. xarray.DataArray
+        t     : temperature. xarray.DataArray
+        use_windspharm: whether or not to use windspharm to compute vorticity
+        lon   : name of longitude coordinate. Guessed if 'infer'
+        lat   : name of latitude coordinate. Guessed if 'infer'
+        pres  : name of vertical coordinate. Guessed (assuming pressure) if 'infer'
+  
+     OUTPUT:
+        potential vorticity. xarray.DataArray
+    '''
+    from .constants import g,f
+    rel_vort = Vorticity(u,v,use_windspharm,lon,lat)
+    if lat == 'infer':
+        lat = FindCoordNames(u)['lat']
+    vort = rel_vort + f(u[lat])
+    if pres == 'infer':
+        dim_names = FindCoordNames(u)
+        pres = dim_names['pres']
+    theta = PotentialTemperature(t,t[pres])
+    dtheta = theta.differentiate(pres,edge_order=2)
+    return -g*vort*dtheta
+
+#######################################################
+def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
+    ''' Compute Potential Vorticity on Isentropic surface(s).
+        Uses wrf-python interplevel function to interpolate from vertical to potential temperature levels.
+      
+      INPUTS:
+        u     : zonal wind. xarray.DataArray
+        v     : meridional wind. xarray.DataArray
+        t     : temperature. xarray.DataArray
+        theta0: value(s) of potential temperature to interpolate onto.
+                 this can be a single value or a list/array. 
+        use_windspharm: whether or not to use windspharm to compute vorticity
+        lon   : name of longitude coordinate. Guessed if 'infer'
+        lat   : name of latitude coordinate. Guessed if 'infer'
+        pres  : name of vertical coordinate. Guessed (assuming pressure) if 'infer'
+
+      OUTPUT:
+        interpolated potential vorticity on given potential temperature levels
+    '''
+    from wrf import interplevel
+    pv = PotentialVorticity(u,v,t,use_windspharm,lon,lat,pres)
+    if pres == 'infer':
+        pres = FindCoordNames(t)['pres']
+    theta = PotentialTemperature(t,t[pres])
+    return interplevel(pv,theta,theta0)
+
+        
