@@ -3052,15 +3052,18 @@ def DetectEvents(ds,thresh,sep=20,period=1,time='time',kind='auto'):
     ex = xr.DataArray(event_id,coords=[event_all.time],name='event_id')
     unique_events = np.unique(ex)
     ts_secs = timedelta(seconds=timestep.values/np.timedelta64(1,'s'))
+    zero = 0*ts_secs
     duration = []
     extreme  = []
     start_dates = []
     end_dates = []
     for ue in unique_events:
         filtr = ex == ue
-        prev_date = ex.isel(time=filtr).time[0].values - period*ts_secs
         # this is a workaround to avoid having objects or arrays of arrays
-        end_date  = ex.isel(time=filtr).time[-1].values+ 0*ts_secs
+        exdate = ex.isel(time=filtr).time[0].values + zero
+        exind  = np.argwhere(ds.time.values==exdate)[0][0]
+        prev_date = ds.isel(time=exind-period+1).time.values + zero
+        end_date  = ex.isel(time=filtr).time[-1].values + zero
         start_dates.append(prev_date)
         end_dates.append(end_date)
         duration.append(period+sum(filtr.values)-1)
