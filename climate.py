@@ -3181,9 +3181,11 @@ def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
     '''
     from wrf import interplevel
     pv = PotentialVorticity(u,v,t,use_windspharm,lon,lat,pres)
+    pv = pv.transpose(*u.dims)
     if pres == 'infer':
         pres = FindCoordNames(t)['pres']
     theta = PotentialTemperature(t,t[pres])
+    theta = theta.transpose(*u.dims)
     return interplevel(pv,theta,theta0)
 
         
