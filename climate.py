@@ -2324,7 +2324,7 @@ def Convert2Days(time,units,calendar):
 	return t.date2num(date)
 
 #######################################################
-def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
+def StandardGrid(data,lon_name='infer',lat_name='infer',pres_name='infer',rename=False,pdir=None):
 	"""
 		Make sure longitude is in [0,360] and latitude sorted
 		 from lowest to highest.
@@ -2336,28 +2336,43 @@ def StandardGrid(data,lon_name='infer',lat_name='infer',rename=False):
 						If None: nothing should be done.
 						If 'infer': try to find name of longitude
 			lat_name:  name of latitude dimension.
-			 			If None: nothing should be done.
+						If None: nothing should be done.
 						If 'infer': try to find name of latitude
-			rename:    Rename dims to standard? If True, output names will be:
-				 		longitude = 'lon'
+			pres_name: name of pressure dimension.
+						If None: nothing should be done.
+						If 'infer': try to find name of pressure
+			rename:	   Rename dims to standard? If True, output names will be:
+						longitude = 'lon'
 						latitude  = 'lat'
 						pressure  = 'press'
+			pdir:	   Re-arrange pressure (or other vertical coordinate):
+						If None: don't do anything
+						If 'decrease': first value is largest
+						If 'increase': first value is smallest
 		OUTPUTS:
 			data:	  xarray.DataArray with latitude from lowest to highest and
 					   longitude between 0 and 360 degrees.
 	"""
-	if lon_name == 'infer' or lat_name == 'infer':
+	if lon_name == 'infer' or lat_name == 'infer' or pres_name == 'infer':
 		dim_names = FindCoordNames(data)
 		if lon_name == 'infer' and 'lon' in dim_names.keys():
 			lon_name = dim_names['lon']
 		if lat_name == 'infer' and 'lat' in dim_names.keys():
 			lat_name = dim_names['lat']
+		if pres_name == 'infer' and 'pres' in dim_names.keys():
+			pres_name = dim_names['pres']
 	if lat_name is not None and lat_name in data.coords:
 		if data[lat_name][0] > data[lat_name][-1]:
 			data = data.sortby(lat_name)
 	if lon_name is not None and lon_name in data.coords and data[lon_name].min() < 0:
 		data = data.assign_coords({lon_name : (data[lon_name]+360)%360})
 		data = data.sortby(lon_name)
+	if pdir is not None:
+		p_name = dim_names['pres']
+		if pdir == 'decrease':
+			data = data.sortby(p_name,ascending=False)
+		elif pdir == 'increase':
+			data = data.sortby(p_name,ascending=True)
 	if rename:
 		data = data.rename(dict(map(reversed, dim_names.items())))
 	return data
