@@ -12,6 +12,13 @@ Tfreeze = 273.16 # [K]
 p0 = 1e3 # [hPa]
 p0_Pa = 1e5 # [Pa]
 
+cmaps = {
+    'slp'    : 'BrBG_r',
+    'precip' : 'PuOr',
+    't'      : 'RdBu_r',
+    'u'      : 'RdBu_r',
+}
+
 def f(lat):
     ''' Compute Coriolis parameter f = 2*Omega*sin(lat)
 
