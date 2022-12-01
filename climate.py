@@ -1640,26 +1640,20 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	return integ
 
 ##############################################################################################
-def GlobalAvgXr(ds,lats=[-90,90],lat=None,cosp=1):
+def GlobalAvgXr(ds,lats=[-90,90],lat='infer',cosp=1):
 	"""Compute cosine weighted meridional average.
 
 	INPUTS:
-	  ds    - xarray.Dataset or xarray.DataArray to average.
-	  lats  - latitude range to average over.
-	  lat   - name of latitude dimension - guess if None.
-	  cosp  - power of cosine weighting
+	  ds	- xarray.Dataset or xarray.DataArray to average.
+	  lats	- latitude range to average over.
+	  lat	- name of latitude dimension - guess if 'infer'.
+	  cosp	- power of cosine weighting
 	OUTPUTS:
 	  averaged data, size ds minus latitude
 	"""
-	guesses = ['lat','latitude']
 	# try to find latitude dimension
-	if lat is None:
-		coordsList = list(ds.coords)
-		checks = [l.lower() in guesses for l in coordsList]
-		if np.any(checks):
-			lat = coordsList[checks.index(True)]
-		else:
-			raise Error("couldn't find latitude dimension. Please set `lat` input.")
+	if lat == 'infer':
+		lat = FindCoordNames(ds)['lat']
 	# make sure order of latitude is correct
 	revert = False
 	if ds[lat][0] < ds[lat][-1]:
@@ -3203,4 +3197,78 @@ def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
     theta = theta.transpose(*u.dims)
     return interplevel(pv,theta,theta0)
 
-        
+
+#######################################################
+def ComputeSurface(ds,lon='infer',lat='infer'):
+    """Compute the surface [m2] of each grid box in ds."""
+    from .constants import coslat,a0
+    if lon == 'infer':
+        lon = FindCoordNames(ds)['lon']
+    if lat == 'infer':
+        lat = FindCoordNames(ds)['lat']
+    #dlam = a0*coslat(ds[lat])*np.deg2rad(np.mean(ds[lon].values[1:]-ds[lon].values[:-1]))
+    dlam = a0*coslat(ds[lat])*np.deg2rad(ds[lon].diff(lon))
+    #dphi = a0*np.deg2rad(np.mean(ds[lat].values[1:]-ds[lat].values[:-1]))
+    dphi = a0*np.deg2rad(ds[lat].diff(lat))
+    return dlam*dphi
+
+#######################################################
+def GlobalMass(da,lon='infer',lat='infer',pres='infer'):
+    """Compute global mass of da, which is assumed in units of [kg/kg], such as specific humidity. Also assumes pressure coordinates in hPa.
+
+	INPUTS:
+	  da   - xarray.DataArray assumed in [kg/kg]
+	  lon  - name of longitude. Guessed if 'infer'. 
+	  lat  - name of latitude. Guessed if 'infer'.
+	  pres - name of pressure, assumed in hPa. Guessed if 'infer'.
+	OUTPUTS:
+	  mass - globally integrated mass
+    """
+    from .constants import a0,g,coslat
+    if lon == 'infer':
+        lon = FindCoordNames(da)['lon']
+    if lat == 'infer':
+        lat = FindCoordNames(da)['lat']
+    if pres == 'infer':
+        pres = FindCoordNames(da)['pres']
+    mass_y = np.deg2rad((coslat(da[lat])*da).integrate(lat))
+    mass_x = np.deg2rad(mass_y.integrate(lon))
+    mass_p = mass_x.integrate(pres)*100
+    mass = a0**2/g*mass_p
+    if da[pres][0]>da[pres][-1]:
+        mass = -mass
+    return mass
+
+#######################################################
+def TotalColumnOzone(o3,t,units=1,pres='infer'):
+    '''Compute total column ozone in DU, given vertical profile(s) of ozone.
+       Ozone concentration is assumed to be mol/mol (units=1) or kg/kg (units=2).
+       Assumes pressure in hPa.
+    '''
+    from .constants import R,Rd,g,Na
+    if pres == 'infer':
+        pres = FindCoordNames(o3)['pres']
+    P = o3[pres]
+    if units == 1: #[mol/mol]
+        mol_air = P/R/t*100 #[mol/m3]
+        mol_o3  = mol_air*o3 #[mol/m3]
+        #pressure can be in any direction, so use abs()
+        num_o3  = np.abs(Rd/g*(t*mol_o3/P).integrate(pres)) #[mol/m2]
+        num_o3  = Na*num_o3 #[molecules/m2]
+        one_DU  = 2.69e20 #[molecules/m2]
+        DU      = num_o3/one_DU
+    return DU
+            
+def ComputeOzoneHoleArea(o3,hemi='S',lat='infer',lon='infer'):
+        if lat == 'infer':
+                lat = FindCoordNames(o3)['lat']
+        if lon == 'infer':
+                lon = FindCoordNames(o3)['lon']
+        o3 = StandardGrid(o3)
+        if hemi == 'S':
+                o3s = o3.sel({lat:slice(-90,-40)})
+        else:
+                o3s = o3.sel({lat:slice(40,90)})
+        filtr = o3s < 220
+        surf = ComputeSurface(o3s)
+        return surf.where(filtr).sum(['lon','lat'])
