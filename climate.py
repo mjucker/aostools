@@ -610,6 +610,18 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 			s   - variances
 			v   - temporal modes
 	"""
+	is_xr = False
+	try:
+		import xarray as xr
+		if isinstance(X,xr.DataArray):
+			is_xr = True
+			dims = []
+			for dim in X.dims[1:]:
+				dims.append(X[dim])
+			tdim = [X[X.dims[0]]]
+			X = X.values
+	except:
+		pass
 	import scipy.signal as sg
 	# make sure we have a matrix time x space
 	shpe = X.shape
@@ -659,6 +671,11 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 		newshape = list(shpe[1:])+[n]
 		EOF = EOF.reshape(newshape)
 		u   = u	 .reshape(newshape)
+	if is_xr: # return xarray dataarrays
+		mode = [('n',np.arange(1,n+1))]
+		EOF = xr.DataArray(EOF,coords=dims+mode,name='EOF')
+		PC  = xr.DataArray(PC,coords=tdim+mode,name='PC')
+		E   = xr.DataArray(E,coords=mode,name='E')
 	return EOF,PC,E,u,s,v
 
 
