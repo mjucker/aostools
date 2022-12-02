@@ -2681,7 +2681,7 @@ def Anomaly(da,groupby='time.dayofyear',climate=None):
 	INPUTS:
 	   da	  : xarray.DataArray or xarray.Dataset from which to compute anomalies.
 	   groupby: defines frequency for anomalies. If None, return anomalies with respect to total average (useful if only one-dimensional).
-	   climate: define period for baseline climatology. All time steps if None.
+	   climate: define period for baseline climatology. list of two dates [string]. All time steps if None.
 	OUTPUTS:
 	   da	  : input array as anomalies with respect to `groupby`
 	'''
