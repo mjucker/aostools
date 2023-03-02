@@ -579,12 +579,12 @@ def ComputeVertEddyXr(v,t,p='level',p0=1e3,lon='lon',time='time',ref='mean',wave
 			dthdp = dthdp
 	# now get wave component
 	if isinstance(wave,list):
-		vpTp = GetWavesXr(v,t,wave=-1).sel(k=wave).sum('k')
+		vpTp = GetWavesXr(v,t,dim=lon,wave=-1).sel(k=wave).sum('k')
 	elif wave == 0:
 		vpTp = (v - v_bar)*(t - t_bar)
 		vpTp = vpTp.mean(lon)  # vpTp = bar(v'Th')
 	else:
-		vpTp = GetWavesXr(v,t,wave=wave) # vpTp = bar(v'Th'_{k=wave})
+		vpTp = GetWavesXr(v,t,dim=lon,wave=wave) # vpTp = bar(v'Th'_{k=wave})
 	t_bar = vpTp/dthdp # t_bar = bar(v'Th')/(dTh_bar/dp)
 	#
 	return v_bar,t_bar
@@ -1120,13 +1120,13 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	#
 	## get zonal anomalies
 	if isinstance(wave,list):
-		upvp = GetWavesXr(u,v,wave=-1).sel(k=wave).sum('k')
+		upvp = GetWavesXr(u,v,dim=lon,wave=-1).sel(k=wave).sum('k')
 	elif wave == 0:
 		u = u - u.mean(lon)
 		v = v - v.mean(lon)
 		upvp = (u*v).mean(lon)
 	else:
-		upvp = GetWavesXr(u,v,wave=wave)
+		upvp = GetWavesXr(u,v,dim=lon,wave=wave)
 	#
 	## compute the horizontal component
 	if do_ubar:
@@ -1141,12 +1141,12 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	ep2_cart = fhat*vertEddy # [1/s*m.hPa/s] = [m.hPa/s2]
 	if w is not None:
 		if isinstance(wave,list):
-			w = GetWavesXr(u,w,wave=-1).sel(k=wave).sum('k')
+			w = GetWavesXr(u,w,dim=lon,wave=-1).sel(k=wave).sum('k')
 		elif wave == 0:
 			w = w - w.mean(lon) # w = w' [hPa/s]
 			w = (w*u).mean(lon) # w = bar(u'w') [m.hPa/s2]
 		else:
-			w = GetWavesXr(u,w,wave=wave)
+			w = GetWavesXr(u,w,dim=lon,wave=wave)
 		ep2_cart = ep2_cart - w # [m.hPa/s2]
 	#
 	#
@@ -2104,7 +2104,7 @@ def GetAnomaly(x,axis=-1):
 	return x
 
 ##############################################################################################
-def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
+def GetWavesXr(x,y=None,wave=-1,dim='infer',anomaly=None):
 	"""Get Fourier mode decomposition of x, or <x*y>, where <.> is zonal mean.
 
 		If y!=None, returns Fourier mode contributions (amplitudes) to co-spectrum zonal mean of x*y. Dimension along which Fourier is performed is either gone (wave>=0) or has len(axis)/2+1 due to Fourier symmetry for real signals (wave<0).
@@ -2116,12 +2116,15 @@ def GetWavesXr(x,y=None,wave=-1,dim='lon',anomaly=None):
 		x	   - the array to decompose. xr.DataArray
 		y	   - second array if wanted. xr.DataArray
 		wave	   - which mode to extract. all if <0
-		dim	   - along which dimension of x (and y) to decompose
+		dim	   - along which dimension of x (and y) to decompose. Defaults to longitude if 'infer'.
 		anomaly	   - if not None, name of dimension along which to compute anomaly first.
 	OUTPUTS:
 		xym	   - data. xr.DataArray
 	"""
 	from xarray import DataArray
+	if dim == 'infer':
+		dim_names = FindCoordNames(x)
+		dim = dim_names['lon']
 	if anomaly is not None:
 		x = x - x.mean(anomaly)
 		if y is not None:
