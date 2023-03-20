@@ -13,7 +13,7 @@ def DefCompress(x,varName=None):
 
         INPUTS:
             x       : either a xarray.DataArray or xarray.Dataset
-            varName : only encode that variable. If None, encode all variables
+            varName : only encode that variable, or those variables if a list. If None, encode all variables
         OUTPUTS:
             encodeDict : dictionary containing compressing information for each
                           variable. To be used as x.to_netcdf(encoding=encodeDict)
