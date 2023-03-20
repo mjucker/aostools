@@ -746,7 +746,7 @@ def ComputeAnnularMode(lat, pres, data, choice='z', hemi='infer', detrend='const
 			if eof_in is None:
 				eof1,pc1,E,u,s,v = eof(var,n=1,detrend=detrend)
 			else:
-				pc1 = eof(var,n=1,detrend=detrend,eof_in=eof_in[k,:])
+				pc1 = eof(var,n=1,detrend=detrend,eof_in=np.expand_dims(eof_in[k,:],-1))
 				eof1 = eof_in[k,:]
 			# force the sign of PC
 			pc1  = pc1*sig*np.sign(eof1[jj].mean())
@@ -2870,10 +2870,12 @@ def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
 	  OUTPUTS:
 	     cbar: colorbar object.
 	'''
+	if not (isinstance(axs,list) or isinstance(axs,np.ndarray)):
+		axs = axs.ravel().to_list()
 	if cbar_args is None:
-		return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink)
+		return fig.colorbar(cf, ax=axs, shrink=shrink)
 	else:
-		return fig.colorbar(cf, ax=axs.ravel().tolist(), shrink=shrink, **cbar_args)
+		return fig.colorbar(cf, ax=axs, shrink=shrink, **cbar_args)
 #######################################################
 def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
@@ -2908,7 +2910,9 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	if isinstance(axs,Axes):
 	    axs = array(axs)
 	from string import ascii_lowercase
-	for a,ax in enumerate(axs.flatten()):
+	if not isinstance(axs,list):
+	    axs = axs.flatten()
+	for a,ax in enumerate(axs):
 	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
 
 #######################################################
