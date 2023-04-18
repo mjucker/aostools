@@ -1709,7 +1709,7 @@ def ComputeN2(pres,Tz,H=7.e3,Rd=287.04,cp=1004):
 	return N2
 
 ##############################################################################################
-def ComputeN2Xr(Tz,pres='level',H=7.e3,Rd=287.04,cp=1004):
+def ComputeN2Xr(Tz,pres='infer',H=7.e3,Rd=287.04,cp=1004):
 	''' Compute the Brunt-Vaisala frequency from zonal mean temperature
 		 N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
 		 this is equivalent to
@@ -1724,6 +1724,9 @@ def ComputeN2Xr(Tz,pres='level',H=7.e3,Rd=287.04,cp=1004):
 		OUTPUTS:
 			N2  - Brunt-Vaisala frequency, [1/s2], dim pres x lat
 	'''
+	if pres == 'infer':
+		dim_names = FindCoordNames(Tz)
+		pres = dim_names['pres']
 	dTdp = Tz.differentiate(pres,edge_order=2)*0.01
 	p = Tz[pres]*100. # [Pa]
 	N2 = -Rd*p/(H**2.) * (dTdp - Rd*Tz/(p*cp))
@@ -3210,7 +3213,7 @@ def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
         pres  : name of vertical coordinate. Guessed (assuming pressure) if 'infer'
 
       OUTPUT:
-        interpolated potential vorticity on given potential temperature levels
+	interpolated potential vorticity on given potential temperature levels
     '''
     from wrf import interplevel
     pv = PotentialVorticity(u,v,t,use_windspharm,lon,lat,pres)
@@ -3219,7 +3222,10 @@ def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
         pres = FindCoordNames(t)['pres']
     theta = PotentialTemperature(t,t[pres])
     theta = theta.transpose(*u.dims)
-    return interplevel(pv,theta,theta0)
+    ipv = interplevel(pv,theta,theta0)
+    if 'vert_units' in ipv.attrs:
+	    del ipv.attrs['vert_units']
+    return ipv
 
 
 #######################################################
