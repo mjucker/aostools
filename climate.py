@@ -1213,7 +1213,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 			vw = VectorWind(u,v)
 		psi = vw.streamfunction()
 		# windspharm might invert latitude
-		return psi.interp_like(u)
+		return psi.reindex_like(u)
 	else:
 		u = u.sortby(lat)
 		v = v.sortby(lat)
