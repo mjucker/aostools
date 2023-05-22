@@ -2737,14 +2737,19 @@ def StackArray(x,dim):
 
 	INPUTS:
 	   x  : xarray.DataArray or Dataset to be stacked
-	   dim: sole dimension to remain after stacking
+	   dim: sole dimension to remain after stacking, None if all dimensions to be stacked
 	OUTPUTS:
 	   stacked: same as x, but stacked
 	'''
-	dims = []
-	for d in x.dims:
-		if d != dim:
-			dims.append(d)
+	if len(x.dims) == 0:
+		return x
+	if dim not in x.dims or dim is None:
+		dims = list(x.dims)
+	else:
+		dims = []
+		for d in x.dims:
+			if d != dim:
+				dims.append(d)
 	return x.stack(stacked=dims)
 
 def ComputeStat(i,sx,y,sy,test):
@@ -2774,11 +2779,15 @@ def ComputeStat(i,sx,y,sy,test):
 			if y is None: # check sx for same sign
 				posx = np.sum(sx.isel(stacked=i) > 0)
 				ploc = max(posx,lenx-posx)/lenx
-			elif isinstance(y,float) or isinstance(y,int): # check sx for sign of y
+			elif isinstance(y,float) or isinstance(y,int) or ( isinstance(sy,DataArray) and 'stacked' not in sy.dims ): # check sx for sign of y
 				samex = np.sum( np.sign(sx.isel(stacked=i)) == np.sign(y) )
+				ploc  = samex/lenx
+			elif isinstance(sy,DataArray) and (len(sy.isel(stacked=i).dims) == 0 ): # check sx for sign of y, where y is not an ensemble, but a function of space
+				samex = np.sum( np.sign(sx.isel(stacked=i)) == np.sign(sy.isel(stacked=i)) )
 				ploc  = samex/lenx
 			else: # check two ensembles for same sign
 				# ensembles are not 1-by-1, so we can't check sign along dimension
+				# sy might not be an ensemble
 				lenx = len(sx.isel(stacked=i))
 				posx = np.sum(sx.isel(stacked=i) > 0)/lenx
 				leny = len(sy.isel(stacked=i))
@@ -3007,6 +3016,7 @@ def CloseGlobe(ds,lon='infer',copy_all=True):
 			else:
 				coords.append((coord,da[coord].data))
 		data = xr.DataArray(p1,coords=coords,name=da.name)
+		data.attrs = da.attrs
 		for coord in da.coords:
 			if coord in data.coords:
 				data[coord].attrs = da[coord].attrs
