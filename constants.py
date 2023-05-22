@@ -19,6 +19,7 @@ cmaps = {
     'precip' : 'PuOr',
     't'      : 'RdBu_r',
     'u'      : 'RdBu_r',
+    'olr'    : 'PiYG',
 }
 
 def f(lat):
