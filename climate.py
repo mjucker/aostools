@@ -2778,6 +2778,8 @@ def ComputeStat(i,sx,y,sy,test):
 			lenx = len(sx.isel(stacked=i))
 			if y is None: # check sx for same sign
 				posx = np.sum(sx.isel(stacked=i) > 0)
+				# need to check positive and negative, to account for NaN
+				negx = np.sum(sx.isel(stacked=i) < 0)
 				ploc = max(posx,lenx-posx)/lenx
 			elif isinstance(y,float) or isinstance(y,int) or ( isinstance(sy,DataArray) and 'stacked' not in sy.dims ): # check sx for sign of y
 				samex = np.sum( np.sign(sx.isel(stacked=i)) == np.sign(y) )
@@ -3233,6 +3235,8 @@ def IPV(u,v,t,theta0,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
     theta = PotentialTemperature(t,t[pres])
     theta = theta.transpose(*u.dims)
     ipv = interplevel(pv,theta,theta0)
+    ipv.name = 'ipv'
+    ipv.attrs['long_name'] = 'isentropic potential vorticity'
     if 'vert_units' in ipv.attrs:
 	    del ipv.attrs['vert_units']
     return ipv
