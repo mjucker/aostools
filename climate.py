@@ -2166,6 +2166,30 @@ def GetWavesXr(x,y=None,wave=-1,dim='infer',anomaly=None):
 
 
 #######################################################
+def SphericalDistance(d,mode,lat=None):
+        """Convert a distance d between degrees and meters on Earth's surface.
+            
+           INPUTS:
+            d   : distance to be converted. degrees or meters.
+            mode: 'm2lat': convert d [m] to degrees latitude.
+                  'lat2m': convert d [deg latitude] to meters.
+                  'm2lon': convert d [m] to degrees longitude. Requires lat in degrees.
+                  'lon2m': convert d [deg longitude] at lat [deg latitude] to meters.
+            lat : latitude [in degrees] of meridian if mode = 'm2lon' or 'lon2m'
+          OUTPUT:
+            distance in corresponding units.
+        
+        """
+        from .constants import a0,coslat
+        if mode == 'm2lat':
+                return np.rad2deg(d/a0)
+        elif mode == 'lat2m':
+                return np.deg2rad(d)*a0
+        elif mode == 'm2lon':
+                return np.rad2deg(d/a0/coslat(lat))
+        elif mode == 'lon2m':
+                return coslat(lat)*a0*np.deg2rad(d)
+#######################################################
 def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	"""Convert value (probably vector component) of one unit
 		into another one.
