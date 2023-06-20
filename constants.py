@@ -20,6 +20,7 @@ cmaps = {
     't'      : 'RdBu_r',
     'u'      : 'RdBu_r',
     'olr'    : 'PiYG',
+    'cldfrac': 'binary_r',
 }
 
 def f(lat):
