@@ -3283,20 +3283,28 @@ def GlobalMass(da,lon='infer',lat='infer',pres='infer'):
 def TotalColumnOzone(o3,t,units=1,pres='infer'):
     '''Compute total column ozone in DU, given vertical profile(s) of ozone.
        Ozone concentration is assumed to be mol/mol (units=1) or kg/kg (units=2).
-       Assumes pressure in hPa.
+       Assumes pressure in hPa, and only works with xarray.DataArrays.
+
+      INPUTS:
+        o3:    ozone mixing ratio, either in mol/mol or kg/kg
+        t:     temperature in K
+        units: 1 if [o3] in mol/mol, 2 if in kg/kg
+        pres:  name of pressure coordinate.
     '''
     from .constants import R,Rd,g,Na
     if pres == 'infer':
         pres = FindCoordNames(o3)['pres']
     P = o3[pres]
-    if units == 1: #[mol/mol]
-        mol_air = P/R/t*100 #[mol/m3]
-        mol_o3  = mol_air*o3 #[mol/m3]
-        #pressure can be in any direction, so use abs()
-        num_o3  = np.abs(Rd/g*(t*mol_o3/P).integrate(pres)) #[mol/m2]
-        num_o3  = Na*num_o3 #[molecules/m2]
-        one_DU  = 2.69e20 #[molecules/m2]
-        DU      = num_o3/one_DU
+    if units == 2: #[kg/kg]
+        o3 = o3*29/48
+    # we now have o3 in mol/mol
+    mol_air = P/R/t*100 #[mol/m3]
+    mol_o3  = mol_air*o3 #[mol/m3]
+    #pressure can be in any direction, so use abs()
+    num_o3  = np.abs(Rd/g*(t*mol_o3/P).integrate(pres)) #[mol/m2]
+    num_o3  = Na*num_o3 #[molecules/m2]
+    one_DU  = 2.69e20 #[molecules/m2]
+    DU      = num_o3/one_DU
     return DU
             
 def ComputeOzoneHoleArea(o3,hemi='S',lat='infer',lon='infer'):
