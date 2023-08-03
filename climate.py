@@ -2166,7 +2166,7 @@ def GetWavesXr(x,y=None,wave=-1,dim='infer',anomaly=None):
 
 
 #######################################################
-def SphericalDistance(d,mode,lat=None):
+def SphericalDistance(d,mode,lat=None,closest=False):
         """Convert a distance d between degrees and meters on Earth's surface.
             
            INPUTS:
@@ -2176,8 +2176,9 @@ def SphericalDistance(d,mode,lat=None):
                   'm2lon': convert d [m] to degrees longitude. Requires lat in degrees.
                   'lon2m': convert d [deg longitude] at lat [deg latitude] to meters.
             lat : latitude [in degrees] of meridian if mode = 'm2lon' or 'lon2m'
+            closest: find the closest distance in any direction around the globe between two longitudes rather than simple distance. Only for mode = 'lon2m' and if |d|>180.
           OUTPUT:
-            distance in corresponding units.
+            distance in degrees or meters.
         
         """
         from .constants import a0,coslat
@@ -2188,7 +2189,23 @@ def SphericalDistance(d,mode,lat=None):
         elif mode == 'm2lon':
                 return np.rad2deg(d/a0/coslat(lat))
         elif mode == 'lon2m':
-                return coslat(lat)*a0*np.deg2rad(d)
+                if closest:
+                        # lon is periodic
+                        #  the distance is the shortest path
+                        #  which might be the other way around the globe
+                        # first set the sign of the final output
+                        sgn = np.sign(180-np.abs(d))
+                        sgn = np.where(sgn==0,np.ones_like(sgn),sgn)
+                        sig = np.where(np.sign(d)==0,np.ones_like(sgn),np.sign(d))
+                        sig = sig*sgn
+                        # then go the other way around the globe
+                        d1 = -np.abs(d)%360
+                        dist = np.abs(coslat(lat)*a0*np.deg2rad(d))
+                        dist1= np.abs(coslat(lat)*a0*np.deg2rad(d1))
+                        return sig*np.minimum(dist,dist1)
+                else:
+                        return coslat(lat)*a0*np.deg2rad(d)
+
 #######################################################
 def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	"""Convert value (probably vector component) of one unit
