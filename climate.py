@@ -2238,6 +2238,8 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
 		if ndims > 1:
 			tmp = AxRoll(data,axis)
+                else:
+                        tmp = data
 	# else:
 	#	tmp = data
 	#	out = np.zeros_like(tmp)
