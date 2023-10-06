@@ -36,7 +36,7 @@ def f(lat):
 
 def beta(lat,u=None):
     ''' Compute meridional derivative of Coriolis parameter, i.e. beta = 2*Omega*cos(lat)/a0.
-          If u is not None, returns beta = 2*Omega*cos(lat)/a0 - u_yy
+          If u is not None, returns beta* = 2*Omega*cos(lat)/a0 - u_yy
           If u is not None, it has to be an xarray.DataArray.
 
     INPUTS:
@@ -56,6 +56,15 @@ def beta(lat,u=None):
         uyy = deg2rad((uy/coslat(lat)/a0).differentiate(lats,edge_order=2))/a0
         return beta - uyy
 
+def kstar(u,lat,c=0):
+        '''K* = \cos\theta\sqrt{\beta*/(u-c)}
+           \beta* = \beta - u_yy
+        '''
+        from numpy import sqrt
+        beta_star = beta(lat,u)
+        k_star = coslat(lat)*sqrt(beta_star/(u-c))
+        return k_star
+                         
 
 def coslat(lat):
     '''Compute cosine of latitude from degrees.
