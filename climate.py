@@ -2164,6 +2164,37 @@ def GetWavesXr(x,y=None,wave=-1,dim='infer',anomaly=None):
 	return gwx.unstack()
 
 
+#######################################################
+def SphericalTrack(ds,lon='infer',domain_size=360):
+	'''Remove steps in a sequence of longitudes due to periodicity.
+	    Written with the entire globe in mind, but also works with limited domains and arbitrary dimensions.
+
+	   INPUTS:
+	      ds:	   input dataset. Either xr.Dataset,xr.DataArray, or pd.Dataframe
+	      lon:	   name of longitude (or any period dimension) in dataset. best guess if 'infer'.
+	      domain_size: size of the actual domain. Steps are detected if they are larger than half the domain size.
+
+	   OUTPUTS:
+	      ds:	   same dataset as input, but variable lon now changed.
+	'''
+	import xarray as xr
+	if lon == 'infer':
+		dim_names = FindCoordNames(x)
+		lon = dim_names['lon']
+	lon_arr = ds[lon]
+	difflon = np.diff(lon_arr)
+	argmx = np.argmax(np.abs(difflon))
+	#find the side we have to extend
+	while np.max(np.abs(difflon)) > domain_size/2:
+		argmx = np.argmax(np.abs(difflon))
+		step_sign = np.sign(difflon)[argmx]
+		lon_arr[argmx+1:] = lon_arr[argmx+1:] - step_sign*domain_size
+		difflon = np.diff(lon_arr)
+	if isinstance(ds,xr.Dataset) or isinstance(ds,xr.DataArray):
+		ds = ds.assign_coords({lon:lon_arr})
+	else:
+		ds[lon] = lon_arr
+	return ds
 
 #######################################################
 def SphericalDistance(d,mode,lat=None,closest=False):
@@ -2238,8 +2269,8 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	elif mode in ['m2lon','lon2m','m2hPa','hPa2m']:
 		if ndims > 1:
 			tmp = AxRoll(data,axis)
-                else:
-                        tmp = data
+		else:
+			tmp = data
 	# else:
 	#	tmp = data
 	#	out = np.zeros_like(tmp)
@@ -2606,7 +2637,7 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
+def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
 	"""
 		Produce variability index timeseries from SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
@@ -2616,20 +2647,32 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 			lon:  name of longitude dimension. Has to be in [0,360]. If 'infer', try to guess.
 			lat:  name of latitude dimension. Has to be increasing. If 'infer', try to guess.
 			time: name of time dimension. If 'infer', try to guess.
-			avg:  size of rolling window for rolling time average [months].
+			avg:  size of rolling window for rolling time average [months]. Overwrites defaults for each index.
 			index: which index to compute. Choices are
 				   Nino: '1+2','3','4','3.4','oni','tni','modiki'
 					'oni' is the same as '3.4', as they only
 					 distinguish themselves via the rolling
 					 average period (3 months for oni,
 					 5 months for 3.4)
-                                        'modiki' is the same as 'tni'
-                                    IOD: 'dmi' is Indian Ocean Dipole
+					'modiki' is the same as 'tni'
+				    IOD: 'dmi' is Indian Ocean Dipole
+				    SAM: 'sam' is the zonal mean SLP Marshall index. In this case, sst is actually slp.
 
 		OUTPUTS:
 			sst: spatially averaged over respective index domain
 				  note that output is monthly
 	"""
+	avgs = {
+		'1+2': 5,
+		'3'  : 5,
+		'4'  : 5,
+		'3.4': 5,
+		'oni': 3,
+		'tni': 5,
+		'modiki': 5,
+                'dmi': 1,
+		'sam': 1,
+		}
 	# shape
 	if lon == 'infer' or lat == 'infer':
 		dim_names = FindCoordNames(sst)
@@ -2643,11 +2686,14 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 		'4'   : {lon:slice(160,210),lat:slice(-5,5)},
 		'3.4' : {lon:slice(190,240),lat:slice(-5,5)},
 		'oni' : {lon:slice(190,240),lat:slice(-5,5)},
-                'tni' : '1+2std - 4std',
-                'modiki':'tni',
-                'dmi' : 'dmi1 - dmi2',
-                'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
-                'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)}
+		'tni' : '1+2std - 4std',
+		'modiki':'tni',
+		'dmi' : 'dmi1 - dmi2',
+		'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
+		'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)},
+		'sam1': {lat:40},
+		'sam2': {lat:65},
+		'sam' : 'sam1std - sam2std',
 	}
 	possible_ninos = list(indList.keys())
 	if index not in possible_ninos:
@@ -2665,7 +2711,10 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 	sst = sst.resample({time:'1M'}).mean()
 
 	def NinoAvg(sst,nino,time,avg,std=True):
-		ssta = sst.sel(indList[nino]).mean(dim=[lon,lat])
+		if 'sam' in nino:
+			ssta = sst.sel(indList[nino],method='nearest').mean(dim=lon)
+		else:
+			ssta = sst.sel(indList[nino]).mean(dim=[lon,lat])
 		sstc = ssta.groupby('.'.join([time,'month'])).mean(dim=time)
 		ssta = ssta.groupby('.'.join([time,'month'])) - sstc
 		if avg is not None:
@@ -2692,12 +2741,18 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=5):
 		std = 'std' in ind2
 		ind2 = NinoAvg(sst,ind2.replace('std',''),time,None,std)
 		indx = (ind1-ind2).load()
-		indx = indx.rolling({time:avg},min_periods=1).mean()
+		if avg is None:
+			indx = indx.rolling({time:avgs[index]},min_periods=1).mean()
+		else:
+			indx = indx.rolling({time:avg},min_periods=1).mean()
 		out  = (indx)/indx.std(dim=time)
 		out.name = index.upper()
 		return out
 	else:
-		out = NinoAvg(sst,index,time,avg)
+		if avg is None:
+			out = NinoAvg(sst,index,time,avgs[index])
+		else:
+			out = NinoAvg(sst,index,time,avg)
 		out.name = index.upper()
 		return out
 
@@ -3017,7 +3072,7 @@ def FindCoordNames(ds):
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
-	for plev in ['level','pres','pfull','lev']:
+	for plev in ['level','pres','pfull','lev','plev']:
 		if plev in ldims:
 			indx = ldims.index(plev)
 			dim_names['pres'] = odims[indx]
@@ -3353,8 +3408,21 @@ def TotalColumnOzone(o3,t,units=1,pres='infer'):
     one_DU  = 2.69e20 #[molecules/m2]
     DU      = num_o3/one_DU
     return DU
-            
+
+#######################################################            
 def ComputeOzoneHoleArea(o3,hemi='S',lat='infer',lon='infer'):
+        '''Compute the area of the ozone hole given total column ozone.
+            Uses 220 DU as definition for the ozone hole.
+       
+         INPUTS:
+            o3:   total column ozone in DU
+            hemi: hemisphere to compute. 'S' or 'N'.
+            lat:  name of latitude dimension
+            lon:  name of longitude dimension
+
+         OUTPUTS:
+            ozone hole area in km2.
+        '''
         if lat == 'infer':
                 lat = FindCoordNames(o3)['lat']
         if lon == 'infer':
