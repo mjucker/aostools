@@ -2637,7 +2637,7 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
+def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None, monthly=True):
 	"""
 		Produce variability index timeseries from a 2D field such as SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
@@ -2657,6 +2657,7 @@ def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=No
 					'modiki' is the same as 'tni'
 				    IOD: 'dmi' is Indian Ocean Dipole
 				    SAM: 'sam' is the zonal mean SLP Marshall index. In this case, sst is actually slp.
+                        monthly: return monthly data, whatever the input data is.
 
 		OUTPUTS:
 			sst: spatially averaged over respective index domain
@@ -2694,8 +2695,8 @@ def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=No
 		'dmi' : 'dmi1 - dmi2',
 		'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
 		'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)},
-		'sam1': {lat:40},
-		'sam2': {lat:65},
+		'sam1': {lat:-40},
+		'sam2': {lat:-65},
 		'sam' : 'sam1std - sam2std',
 	}
 	possible_ninos = list(indList.keys())
@@ -2710,8 +2711,8 @@ def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=No
 	if lon_name is not None or lat_name is not None:
 		#print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
 		sst = StandardGrid(sst,lon_name,lat_name)
-
-	sst = sst.resample({time:'1M'}).mean()
+	if monthly:
+		sst = sst.resample({time:'1M'}).mean()
 
 	def NinoAvg(sst,nino,time,avg,std=True):
 		if 'sam' in nino:
