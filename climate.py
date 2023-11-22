@@ -2637,9 +2637,9 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
+def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
 	"""
-		Produce variability index timeseries from SST according to Technical Notes
+		Produce variability index timeseries from a 2D field such as SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
 
 		INPUTS:
@@ -2670,10 +2670,13 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 		'oni': 3,
 		'tni': 5,
 		'modiki': 5,
-                'dmi': 1,
+		'dmi': 1,
 		'sam': 1,
 		}
 	# shape
+	index = index.lower()
+	if 'lon' not in sst.dims:
+		sst = sst.expand_dims({'lon':[0]})
 	if lon == 'infer' or lat == 'infer':
 		dim_names = FindCoordNames(sst)
 	if lon == 'infer':
@@ -2756,6 +2759,11 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 		out.name = index.upper()
 		return out
 
+
+#######################################################
+def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
+	print('OceanIndex is deprecated. Please use ClimateIndex instead')
+	return ClimateIndex(sst, index, lon, lat, time, avg)
 
 #######################################################
 def RollingMeanStd(x,mean_std,r=31,dim='time'):
