@@ -2260,7 +2260,11 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	   coslat  = np.cos(coord/rad2deg)
 	   cosm1   = 1/coslat
 	   gemfac  = rad2deg/a0
-	#
+	# make sure we are working with arrays
+	was_scalar = False
+	if np.isscalar(data):
+		data = np.array([data])
+		was_scalar = True
 	ndims = len(np.shape(data))
 	if mode == 'm2lat':
 		out = data*gemfac
@@ -2309,7 +2313,10 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 		out = out*H
 		out = AxRoll(out,axis,invert=True)
 	#
-	return out
+	if was_scalar:
+		return float(out)
+	else:
+		return out
 
 ##############################################################################################
 def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=None, minPres=250):
@@ -3018,7 +3025,7 @@ def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
 	else:
 		return fig.colorbar(cf, ax=axs, shrink=shrink, **cbar_args)
 #######################################################
-def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
+def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large',start_index=0):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
 
 	INPUTS:
@@ -3030,6 +3037,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
         va  : manually adjust vertical alignment. overwrites loc.
         ha  : manually adjust horizontal alignment. overwrites loc.
+        start_index: start from this number/letter instead of 0/a.
 	'''
 	from matplotlib.pyplot import Axes
 	from numpy import array
@@ -3054,7 +3062,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	if not isinstance(axs,list):
 	    axs = axs.flatten()
 	for a,ax in enumerate(axs):
-	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
+	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a+start_index]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
 
 #######################################################
 def FindCoordNames(ds):
