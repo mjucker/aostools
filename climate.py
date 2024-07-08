@@ -2683,10 +2683,10 @@ def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=No
 		}
 	# shape
 	index = index.lower()
-	if 'lon' not in sst.dims:
-		sst = sst.expand_dims({'lon':[0]})
 	if lon == 'infer' or lat == 'infer':
 		dim_names = FindCoordNames(sst)
+	if 'lon' not in dim_names.keys():
+		sst = sst.expand_dims({'lon':[0]})
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
@@ -3025,7 +3025,7 @@ def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
 	else:
 		return fig.colorbar(cf, ax=axs, shrink=shrink, **cbar_args)
 #######################################################
-def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large',start_index=0):
+def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,size='large',style=')',weight='normal',start_index=0):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
 
 	INPUTS:
@@ -3037,6 +3037,9 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
         va  : manually adjust vertical alignment. overwrites loc.
         ha  : manually adjust horizontal alignment. overwrites loc.
+        size: font size
+        style:character to add after index; a+) equals a)
+        weight: font weight
         start_index: start from this number/letter instead of 0/a.
 	'''
 	from matplotlib.pyplot import Axes
@@ -3062,7 +3065,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	if not isinstance(axs,list):
 	    axs = axs.flatten()
 	for a,ax in enumerate(axs):
-	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a+start_index]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
+	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a+start_index]+style,verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=size,fontweight=weight)
 
 #######################################################
 def FindCoordNames(ds):
@@ -3452,3 +3455,114 @@ def ComputeOzoneHoleArea(o3,hemi='S',lat='infer',lon='infer'):
         filtr = o3s < 220
         surf = ComputeSurface(o3s)
         return surf.where(filtr).sum(['lon','lat'])
+
+
+#######################################################  
+def Detrend(da, dim, detrend_type="linear", keep_mean=True):
+    """
+    This function comes from the `xrft` package:
+    https://xrft.readthedocs.io/en/latest/_modules/xrft/detrend.html
+    
+    Detrend a DataArray
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        The data to detrend
+    dim : str or list
+        Dimensions along which to apply detrend.
+        Can be either one dimension or a list with two dimensions.
+        Higher-dimensional detrending is not supported.
+        If dask data are passed, the data must be chunked along dim.
+    detrend_type : {'constant', 'linear'}
+        If ``constant``, a constant offset will be removed from each dim.
+        If ``linear``, a linear least-squares fit will be estimated and removed
+        from the data.
+    keep_mean: {True, False}
+        Has no effect if detrend_type = 'constant'
+        If True, keep non-zero mean along dim
+        If False, output will have zero mean
+
+    Returns
+    -------
+    da : xarray.DataArray
+        The detrended data.
+
+    Notes
+    -----
+    This function will act lazily in the presence of dask arrays on the
+    input.
+    """
+    import xarray as xr
+    import scipy.signal as sps
+    import scipy.linalg as spl
+
+    if dim is None:
+        dim = list(da.dims)
+    else:
+        if isinstance(dim, str):
+            dim = [dim]
+
+    if detrend_type not in ["constant", "linear", None]:
+        raise NotImplementedError(
+            "%s is not a valid detrending option. Valid "
+            "options are: 'constant','linear', or None." % detrend_type
+        )
+
+    if detrend_type is None:
+        return da
+    elif detrend_type == "constant":
+        return da - da.mean(dim=dim)
+    elif detrend_type == "linear":
+        if keep_mean:
+                data_mean = da.mean(dim=dim)
+        data = da.data
+        axis_num = [da.get_axis_num(d) for d in dim]
+        chunks = getattr(data, "chunks", None)
+        if chunks:
+            axis_chunks = [data.chunks[a] for a in axis_num]
+            if not all([len(ac) == 1 for ac in axis_chunks]):
+                raise ValueError("Contiguous chunks required for detrending.")
+        if len(dim) == 1:
+            dt = xr.apply_ufunc(
+                sps.detrend,
+                da,
+                axis_num[0],
+                output_dtypes=[da.dtype],
+                dask="parallelized",
+            )
+        elif len(dim) == 2:
+            dt = xr.apply_ufunc(
+                _detrend_2d_ufunc,
+                da,
+                input_core_dims=[dim],
+                output_core_dims=[dim],
+                output_dtypes=[da.dtype],
+                vectorize=True,
+                dask="parallelized",
+            )
+        else:  # pragma: no cover
+            raise NotImplementedError(
+                "Only 1D and 2D detrending are implemented so far."
+            )
+        if keep_mean:
+                dt = dt + data_mean
+    
+    return dt
+
+
+
+def _detrend_2d_ufunc(arr):
+    assert arr.ndim == 2
+    N = arr.shape
+
+    col0 = np.ones(N[0] * N[1])
+    col1 = np.repeat(np.arange(N[0]), N[1]) + 1
+    col2 = np.tile(np.arange(N[1]), N[0]) + 1
+    G = np.stack([col0, col1, col2]).transpose()
+
+    d_obs = np.reshape(arr, (N[0] * N[1], 1))
+    m_est = np.dot(np.dot(spl.inv(np.dot(G.T, G)), G.T), d_obs)
+    d_est = np.dot(G, m_est)
+    linear_fit = np.reshape(d_est, N)
+    return arr - linear_fit
