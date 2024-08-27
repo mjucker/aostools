@@ -21,6 +21,9 @@ cmaps = {
     'u'      : 'RdBu_r',
     'olr'    : 'PiYG',
     'cldfrac': 'binary_r',
+    'ep'     : 'PRGn_r',
+    'v'      : 'PiYG',
+    'pv'     : 'RdYlGn_r',
 }
 
 def f(lat):
