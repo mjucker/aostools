@@ -2260,7 +2260,11 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 	   coslat  = np.cos(coord/rad2deg)
 	   cosm1   = 1/coslat
 	   gemfac  = rad2deg/a0
-	#
+	# make sure we are working with arrays
+	was_scalar = False
+	if np.isscalar(data):
+		data = np.array([data])
+		was_scalar = True
 	ndims = len(np.shape(data))
 	if mode == 'm2lat':
 		out = data*gemfac
@@ -2309,7 +2313,10 @@ def Meters2Coord(data,coord,mode='m2lat',axis=-1):
 		out = out*H
 		out = AxRoll(out,axis,invert=True)
 	#
-	return out
+	if was_scalar:
+		return float(out)
+	else:
+		return out
 
 ##############################################################################################
 def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=None, minPres=250):
@@ -2637,9 +2644,9 @@ def Cart2Sphere(u, v, w, lon='infer', lat='infer', pres=None, H=7e3, p0=1e3):
 
 
 #######################################################
-def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
+def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None, monthly=True):
 	"""
-		Produce variability index timeseries from SST according to Technical Notes
+		Produce variability index timeseries from a 2D field such as SST according to Technical Notes
 		 guidance from UCAR: https://climatedataguide.ucar.edu/climate-data/nino-sst-indices-nino-12-3-34-4-oni-and-tni
 
 		INPUTS:
@@ -2657,6 +2664,7 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 					'modiki' is the same as 'tni'
 				    IOD: 'dmi' is Indian Ocean Dipole
 				    SAM: 'sam' is the zonal mean SLP Marshall index. In this case, sst is actually slp.
+                        monthly: return monthly data, whatever the input data is.
 
 		OUTPUTS:
 			sst: spatially averaged over respective index domain
@@ -2670,12 +2678,15 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 		'oni': 3,
 		'tni': 5,
 		'modiki': 5,
-                'dmi': 1,
+		'dmi': 1,
 		'sam': 1,
 		}
 	# shape
+	index = index.lower()
 	if lon == 'infer' or lat == 'infer':
 		dim_names = FindCoordNames(sst)
+	if 'lon' not in dim_names.keys():
+		sst = sst.expand_dims({'lon':[0]})
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
@@ -2691,8 +2702,8 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 		'dmi' : 'dmi1 - dmi2',
 		'dmi1': {lon:slice(50,70)  ,lat:slice(-10,10)},
 		'dmi2': {lon:slice(90,110) ,lat:slice(-10,0)},
-		'sam1': {lat:40},
-		'sam2': {lat:65},
+		'sam1': {lat:-40},
+		'sam2': {lat:-65},
 		'sam' : 'sam1std - sam2std',
 	}
 	possible_ninos = list(indList.keys())
@@ -2707,8 +2718,8 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 	if lon_name is not None or lat_name is not None:
 		#print('WARNING: re-arranging SST to be in domain [0,360] x [-90,90]')
 		sst = StandardGrid(sst,lon_name,lat_name)
-
-	sst = sst.resample({time:'1M'}).mean()
+	if monthly:
+		sst = sst.resample({time:'1M'}).mean()
 
 	def NinoAvg(sst,nino,time,avg,std=True):
 		if 'sam' in nino:
@@ -2756,6 +2767,11 @@ def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None
 		out.name = index.upper()
 		return out
 
+
+#######################################################
+def OceanIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=None):
+	print('OceanIndex is deprecated. Please use ClimateIndex instead')
+	return ClimateIndex(sst, index, lon, lat, time, avg)
 
 #######################################################
 def RollingMeanStd(x,mean_std,r=31,dim='time'):
@@ -3009,7 +3025,7 @@ def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
 	else:
 		return fig.colorbar(cf, ax=axs, shrink=shrink, **cbar_args)
 #######################################################
-def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,fontsize='large'):
+def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,size='large',style=')',weight='normal',start_index=0):
 	'''Add a), b), ... labels to each panel within a multipanel figure.
 
 	INPUTS:
@@ -3021,6 +3037,10 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
         va  : manually adjust vertical alignment. overwrites loc.
         ha  : manually adjust horizontal alignment. overwrites loc.
+        size: font size
+        style:character to add after index; a+) equals a)
+        weight: font weight
+        start_index: start from this number/letter instead of 0/a.
 	'''
 	from matplotlib.pyplot import Axes
 	from numpy import array
@@ -3045,7 +3065,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,font
 	if not isinstance(axs,list):
 	    axs = axs.flatten()
 	for a,ax in enumerate(axs):
-	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a]+')',verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=fontsize)
+	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a+start_index]+style,verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=size,fontweight=weight)
 
 #######################################################
 def FindCoordNames(ds):
@@ -3435,3 +3455,114 @@ def ComputeOzoneHoleArea(o3,hemi='S',lat='infer',lon='infer'):
         filtr = o3s < 220
         surf = ComputeSurface(o3s)
         return surf.where(filtr).sum(['lon','lat'])
+
+
+#######################################################  
+def Detrend(da, dim, detrend_type="linear", keep_mean=True):
+    """
+    This function comes from the `xrft` package:
+    https://xrft.readthedocs.io/en/latest/_modules/xrft/detrend.html
+    
+    Detrend a DataArray
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        The data to detrend
+    dim : str or list
+        Dimensions along which to apply detrend.
+        Can be either one dimension or a list with two dimensions.
+        Higher-dimensional detrending is not supported.
+        If dask data are passed, the data must be chunked along dim.
+    detrend_type : {'constant', 'linear'}
+        If ``constant``, a constant offset will be removed from each dim.
+        If ``linear``, a linear least-squares fit will be estimated and removed
+        from the data.
+    keep_mean: {True, False}
+        Has no effect if detrend_type = 'constant'
+        If True, keep non-zero mean along dim
+        If False, output will have zero mean
+
+    Returns
+    -------
+    da : xarray.DataArray
+        The detrended data.
+
+    Notes
+    -----
+    This function will act lazily in the presence of dask arrays on the
+    input.
+    """
+    import xarray as xr
+    import scipy.signal as sps
+    import scipy.linalg as spl
+
+    if dim is None:
+        dim = list(da.dims)
+    else:
+        if isinstance(dim, str):
+            dim = [dim]
+
+    if detrend_type not in ["constant", "linear", None]:
+        raise NotImplementedError(
+            "%s is not a valid detrending option. Valid "
+            "options are: 'constant','linear', or None." % detrend_type
+        )
+
+    if detrend_type is None:
+        return da
+    elif detrend_type == "constant":
+        return da - da.mean(dim=dim)
+    elif detrend_type == "linear":
+        if keep_mean:
+                data_mean = da.mean(dim=dim)
+        data = da.data
+        axis_num = [da.get_axis_num(d) for d in dim]
+        chunks = getattr(data, "chunks", None)
+        if chunks:
+            axis_chunks = [data.chunks[a] for a in axis_num]
+            if not all([len(ac) == 1 for ac in axis_chunks]):
+                raise ValueError("Contiguous chunks required for detrending.")
+        if len(dim) == 1:
+            dt = xr.apply_ufunc(
+                sps.detrend,
+                da,
+                axis_num[0],
+                output_dtypes=[da.dtype],
+                dask="parallelized",
+            )
+        elif len(dim) == 2:
+            dt = xr.apply_ufunc(
+                _detrend_2d_ufunc,
+                da,
+                input_core_dims=[dim],
+                output_core_dims=[dim],
+                output_dtypes=[da.dtype],
+                vectorize=True,
+                dask="parallelized",
+            )
+        else:  # pragma: no cover
+            raise NotImplementedError(
+                "Only 1D and 2D detrending are implemented so far."
+            )
+        if keep_mean:
+                dt = dt + data_mean
+    
+    return dt
+
+
+
+def _detrend_2d_ufunc(arr):
+    assert arr.ndim == 2
+    N = arr.shape
+
+    col0 = np.ones(N[0] * N[1])
+    col1 = np.repeat(np.arange(N[0]), N[1]) + 1
+    col2 = np.tile(np.arange(N[1]), N[0]) + 1
+    G = np.stack([col0, col1, col2]).transpose()
+
+    d_obs = np.reshape(arr, (N[0] * N[1], 1))
+    m_est = np.dot(np.dot(spl.inv(np.dot(G.T, G)), G.T), d_obs)
+    d_est = np.dot(G, m_est)
+    linear_fit = np.reshape(d_est, N)
+    return arr - linear_fit

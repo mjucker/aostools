@@ -19,18 +19,14 @@ def DefCompress(x,varName=None):
                           variable. To be used as x.to_netcdf(encoding=encodeDict)
     """
     import numpy as np
+    import xarray as xr
     # check whether x is a Dataset or DataArray
-    try:
-        keys = x.variables.keys()
-        is_dataset = True
-    except:
-        is_dataset = False
+    is_dataset = isinstance(x,xr.Dataset)
     # make a list of variables
     if varName is None:
         vars = []
         if is_dataset:
-            for var in x.variables.keys():
-                vars.append(var)#.encode("utf-8"))
+            vars = list(x.data_vars)
         else:
             vars.append(x.name)#.encode("utf-8"))
     else:
