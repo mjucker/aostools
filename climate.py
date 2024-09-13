@@ -3032,7 +3032,9 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,size
 	axs : axes object, typically from pyplot.subplots() or a FacetPlot
 	loc : semantic location:
 	       'lower left': left of and below axes, outside plot
-	       'upper left': upper left corner, inside plot
+	       'upper left': upper left corner, same position as title
+                              if ypos or xpos are not None, manually position
+                              else, ignore va,ha,size and use title(loc='left')
 	xpos: manually adjust position in x-direction. units are fraction of axis width. overwrites loc.
 	ypos: manually adjust position in y-direction. units are fraction of axis height. overwrites loc.
         va  : manually adjust vertical alignment. overwrites loc.
@@ -3045,6 +3047,7 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,size
 	from matplotlib.pyplot import Axes
 	from numpy import array
 	locations = {
+                # note: 'upper left' is not necessarily used
 		'upper left' : {'xpos':0.01,'ypos':0.99,'va':'top','ha':'left'},
 		'lower left' : {'xpos':-0.15,'ypos':-0.15,'va':'bottom','ha':'left'},
 		'upper right': {'xpos':0.99,'ypos':0.99,'va':'top','ha':'right'},
@@ -3065,7 +3068,11 @@ def AddPanelLabels(axs,loc='lower left',xpos=None,ypos=None,va=None,ha=None,size
 	if not isinstance(axs,list):
 	    axs = axs.flatten()
 	for a,ax in enumerate(axs):
-	    ax.text(locs['xpos'],locs['ypos'],ascii_lowercase[a+start_index]+style,verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=size,fontweight=weight)
+            labl = ascii_lowercase[a+start_index]+style
+            if loc == 'upper left' and ypos is None and xpos is None:
+                    ax.set_title(labl,loc='left')
+            else:
+                    ax.text(locs['xpos'],locs['ypos'],labl,verticalalignment=locs['va'],horizontalalignment=locs['ha'],transform=ax.transAxes,fontsize=size,fontweight=weight)
 
 #######################################################
 def FindCoordNames(ds):
