@@ -3018,7 +3018,8 @@ def AddColorbar(fig,axs,cf,shrink=0.95,cbar_args=None):
 	  OUTPUTS:
 	     cbar: colorbar object.
 	'''
-	if not (isinstance(axs,list) or isinstance(axs,np.ndarray)):
+	from matplotlib.pyplot import Axes
+	if not (isinstance(axs,list) or isinstance(axs,np.ndarray) or isinstance(axs,Axes)):
 		axs = axs.ravel().to_list()
 	if cbar_args is None:
 		return fig.colorbar(cf, ax=axs, shrink=shrink)
