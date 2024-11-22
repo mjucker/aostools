@@ -3100,7 +3100,7 @@ def FindCoordNames(ds):
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
-	for plev in ['level','pres','pfull','lev','plev','pressure_level']:
+	for plev in ['level','pres','pfull','lev','plev','pressure_level','lev_p']:
 		if plev in ldims:
 			indx = ldims.index(plev)
 			dim_names['pres'] = odims[indx]
