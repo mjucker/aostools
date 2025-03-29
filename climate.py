@@ -1657,7 +1657,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	return integ
 
 ##############################################################################################
-def GlobalAvgXr(ds,lats=[-90,90],lat='infer',cosp=1):
+def GlobalAvgXr(ds,lats=[-90,90],lat='infer',cosp=1,zm=True,lon='infer'):
 	"""Compute cosine weighted meridional average.
 
 	INPUTS:
@@ -1665,12 +1665,18 @@ def GlobalAvgXr(ds,lats=[-90,90],lat='infer',cosp=1):
 	  lats	- latitude range to average over.
 	  lat	- name of latitude dimension - guess if 'infer'.
 	  cosp	- power of cosine weighting
+          zm    - also compute zonal mean
+          lon   - name of longitude, only needed if zm=True
 	OUTPUTS:
 	  averaged data, size ds minus latitude
 	"""
 	# try to find latitude dimension
+	dims = FindCoordNames(ds)
 	if lat == 'infer':
-		lat = FindCoordNames(ds)['lat']
+		lat = dims['lat']
+	if zm and lon == 'infer' and 'lon' in dims.keys():
+		lon = dims['lon']
+		ds = ds.mean(lon)
 	# make sure order of latitude is correct
 	revert = False
 	if ds[lat][0] < ds[lat][-1]:
