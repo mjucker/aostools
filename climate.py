@@ -3580,3 +3580,49 @@ def _detrend_2d_ufunc(arr):
     d_est = np.dot(G, m_est)
     linear_fit = np.reshape(d_est, N)
     return arr - linear_fit
+
+####################################################### 
+
+def Regrid(ds_in,ds_ref,field,lon='infer',lat='infer',method='conservative',weights=None):
+    import xarray as xr
+    import xesmf as xe
+    # xesmf only works with 'lon' and 'lat' dimensions which have to be the last two
+    def CreateBounds(x): 
+        import numpy as np
+        dx = np.concatenate([-np.diff(x[:2]),np.diff(x),np.diff(x[-2:])])
+        xb = .5*(x[0]+x[1]) + np.cumsum(dx)
+        return xb
+    dim_names = FindCoordNames(ds_in)
+    if lon == 'infer':
+        lon = dim_names['lon']
+    if lat == 'infer':
+        lat = dim_names['lat']    
+    orig_order = tuple(ds_in[field].dims)
+    ds_in = ds_in.transpose(...,lat,lon)
+    ds_ref= ds_ref.transpose(...,lat,lon)
+    ds_in = ds_in.rename({lon:'lon',lat:'lat'})
+    ds_ref= ds_ref.rename({lon:'lon',lat:'lat'})
+    ds = {'in':ds_in,'ref':ds_ref}
+    for key in ds.keys():
+        for dim in ['lon','lat']:
+            dimb = CreateBounds(ds[key][dim].values)
+            dim_b = dim+'_b'
+            ds[key][dim_b] = xr.DataArray(dimb,dims=(dim_b))
+    regridder = xe.Regridder(ds['in'],ds['ref'],method,reuse_weights=weights)
+    dr = regridder(ds['in'][field])
+    dr = dr.rename({'lon':lon,'lat':lat})
+    if isinstance(dr,xr.DataArray):
+        dr.name = field
+    # keep attributes
+    if isinstance(ds_in,xr.Dataset):
+        dr = dr.to_dataset()
+        for att in ds_in[field].attrs.keys():
+            if 'valid' in att or 'packing' in att:
+                continue
+            dr[field].attrs[att] = ds_in[field].attrs[att]
+    for att in ds_in.attrs.keys():
+        dr.attrs[att] = ds_in.attrs[att]
+    if tuple(dr.dims) == orig_order:
+        return dr
+    else:
+        return dr.transpose(*orig_order)
