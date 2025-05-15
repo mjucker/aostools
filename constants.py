@@ -13,6 +13,12 @@ HLV = 2.5e6 # [J/kg]
 Tfreeze = 273.16 # [K]
 p0 = 1e3 # [hPa]
 p0_Pa = 1e5 # [Pa]
+S0 = 1360 # [W/m2]
+h = 6.626e-34 # [J/s]
+c = 2.998e8 # [m/s]
+kb = 1.38e-23 # [J/K]
+RS = 695700e3 # Sun's radius [m]
+dist_Sun = 150e9 # Earth-Sun distance [m]
 
 cmaps = {
     'slp'    : 'BrBG_r',
@@ -80,3 +86,15 @@ def sinlat(lat):
     '''
     from numpy import sin,deg2rad
     return sin(deg2rad(lat))
+    
+def Planck(T,lam):
+    '''Compute blackbody Planck spectrum.
+    '''
+    from numpy import exp
+    return 2*h*(c**2)/(lam**5)/(exp(h*c/lam/kb/T)-1)
+    
+def Wien(T):
+    '''Compute spectral peak of Planck's BB spectrum following Wien's law.
+    '''
+    x = 4.96511
+    return h*c/x/kb/T
