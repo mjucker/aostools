@@ -2947,7 +2947,7 @@ def StatTest(x,y,test,dim=None,parallel=False):
 		import parmap
 	nspace = len(sx.stacked)
 	if isinstance(y,DataArray):
-		if dim is None or len(y.dims) == 1:
+		if dim is None or ( len(y.dims) == 1 and y.dims[0] == dim ):
 			sy = y.expand_dims(stacked=[0])
 		else:
 			sy = StackArray(y,dim)
