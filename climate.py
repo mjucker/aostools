@@ -1,3 +1,4 @@
+
 #!/usr/bin/python
 # Filename: climate.py
 #
@@ -1519,7 +1520,7 @@ def ComputeWaveActivityFlux(phi_or_u,phiref_or_v,uref=None,vref=None,lat='infer'
 		return wx.where(mask),wy.where(mask),wz.where(mask),div.where(mask),div3.where(mask)
 
 ##############################################################################################
-def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None,quiv_args=None):
+def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',yscale='linear',invert_y=True, newax=False, pivot='tail',scale=None,key=True,quiv_args=None):
 	"""Correctly scales the Eliassen-Palm flux vectors for plotting on a latitude-pressure or latitude-height axis.
 		x,y,ep1,ep2 assumed to be xarray.DataArrays.
 
@@ -1542,6 +1543,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		scale	: keyword argument for quiver(). Smaller is longer [None]
 				  besides fixing the length, it is also usefull when calling this function inside a
 				   script without display as the only way to have a quiverkey on the plot.
+                key     : show quiver key (or not)
                quiv_args: further arguments passed to quiver plot.
 
 	OUTPUTS:
@@ -1611,7 +1613,7 @@ def PlotEPfluxArrows(x,y,ep1,ep2,fig,ax,xlim=None,ylim=None,xscale='linear',ysca
 		U = Q.scale
 	else:
 		U = scale
-	if U is not None: # when running inside a script, the figure might not exist and therefore U is None
+	if U is not None and not key: # when running inside a script, the figure might not exist and therefore U is None
 		ax.quiverkey(Q,0.9,1.02,U/width,label=r'{0:.1e}$\,m^3$'.format(U),labelpos='E',coordinates='axes')
 	if invert_y:
 		ax.invert_yaxis()
@@ -3142,7 +3144,10 @@ def CloseGlobe(ds,lon='infer',copy_all=True):
 			da = ds[array]
 		else:
 			da = ds
-		p1,lon1 = cycpt(da , coord=da[lon])
+		if lon in da.dims:
+			p1,lon1 = cycpt(da , coord=da[lon], axis=da.get_axis_num(lon))
+		else:
+			p1 = da
 		coords = []
 		for coord in da.dims:
 			if coord == lon:
@@ -3583,7 +3588,23 @@ def _detrend_2d_ufunc(arr):
 
 ####################################################### 
 
-def Regrid(ds_in,ds_ref,field,lon='infer',lat='infer',method='conservative',weights=None):
+def Regrid(ds_in,ds_ref,field=None,lon='infer',lat='infer',method='conservative',weights=None,weights_out=False):
+    '''Regrid data onto reference grid using xesmf regridder.
+
+         INPUTS:
+            ds_in:   input dataset, to be regridded
+            ds_ref:  dataset containing new grid
+            field:   name of DataArray within ds_in to regrid. ds_in must be DataArray if field=None
+            lon:     name of longitude dimension.
+            lat:     name of latitude dimension
+            method:  regridding method to use. see xesmf documentation for options
+            weights: if previously calculated, re-use these weights for speed
+            weights_out: also return weights for reuse next time
+
+         OUTPUTS:
+            dr:          regridded DataArray ds_in[field]
+            weights_out: weights used for regridding. optional.
+    '''
     import xarray as xr
     import xesmf as xe
     # xesmf only works with 'lon' and 'lat' dimensions which have to be the last two
@@ -3592,6 +3613,12 @@ def Regrid(ds_in,ds_ref,field,lon='infer',lat='infer',method='conservative',weig
         dx = np.concatenate([-np.diff(x[:2]),np.diff(x),np.diff(x[-2:])])
         xb = .5*(x[0]+x[1]) + np.cumsum(dx)
         return xb
+    if field is None:
+        is_array = True
+        field = ds_in.name
+        ds_in = ds_in.to_dataset()
+    else:
+        is_array = False
     dim_names = FindCoordNames(ds_in)
     if lon == 'infer':
         lon = dim_names['lon']
@@ -3622,7 +3649,12 @@ def Regrid(ds_in,ds_ref,field,lon='infer',lat='infer',method='conservative',weig
             dr[field].attrs[att] = ds_in[field].attrs[att]
     for att in ds_in.attrs.keys():
         dr.attrs[att] = ds_in.attrs[att]
-    if tuple(dr.dims) == orig_order:
-        return dr
+    if tuple(dr.dims) != orig_order:
+        dr = dr.transpose(*orig_order)
+    if is_array:
+        dr = dr[field]
+    if weights_out:
+        wghts = regridder.to_netcdf()
+        return dr,wghts
     else:
-        return dr.transpose(*orig_order)
+        return dr
