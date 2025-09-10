@@ -43,16 +43,21 @@ def DefCompress(x,varName=None):
             filtr = np.isfinite(x[var])
             dataMin = x[var].where(filtr).min().values
             dataMax = x[var].where(filtr).max().values
+            dtype = x[var].dtype
         else:
             filtr = np.isfinite(x)
             dataMin = x.where(filtr).min().values
             dataMax = x.where(filtr).max().values
+            dtype = x.dtype
+        # don't compress integers as scaling will not work with ints
+        if dtype == 'int':
+            continue
         scale_factor=(dataMax - dataMin) / (2**bytes - 2)
         add_offset = (dataMax + dataMin) / 2
         encodeDict[var] = {
             'dtype':'short',
-            'scale_factor':scale_factor,
-            'add_offset': add_offset,
+            'scale_factor':np.astype(scale_factor,dtype),
+            'add_offset': np.astype(add_offset,dtype),
             '_FillValue': fillVal}
     return encodeDict
 
