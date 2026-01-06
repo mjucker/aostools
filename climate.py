@@ -2695,6 +2695,7 @@ def ClimateIndex(sst, index='3.4', lon='infer', lat='infer', time='time', avg=No
 		dim_names = FindCoordNames(sst)
 	if 'lon' not in dim_names.keys():
 		sst = sst.expand_dims({'lon':[0]})
+		dim_names['lon'] = 'lon'
 	if lon == 'infer':
 		lon = dim_names['lon']
 	if lat == 'infer':
@@ -3658,3 +3659,32 @@ def Regrid(ds_in,ds_ref,field=None,lon='infer',lat='infer',method='conservative'
         return dr,wghts
     else:
         return dr
+
+
+############################################################################################
+
+def ComputeTdew(T,RH,fast=False):
+    '''
+       Compute dew point temperature from temperature T and relative humidity RH.
+       Uses equation (11) from Lawrence BAMS (2005).
+
+       INPUTS:
+         T  : temperature, [K]
+         RH : relative humidity, [% \in [0,100]]
+         fast: use approximated equation (1) instead
+ 
+       OUTPUTS:
+         Td : dew point temperature, [K]
+
+    '''
+    import warnings
+    from .constants import Rv,HLV
+    if np.max(RH) < 1:
+      warnings.warn('Relative humidity is assumed in percent (0-100). Your input is < 1: make sure units are correct.')
+    if np.min(T) < 100:
+      warnings.warn('Temperature is assumed in Kelvin. Your input might be Celsius, please check.')
+
+    if fast:
+      return T - (100-RH)/5
+    else:
+      return T/( 1 - Rv/HLV*T*np.log(RH/100) )
