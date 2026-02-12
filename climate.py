@@ -27,6 +27,7 @@ def GetAxSize(fig,ax,dpi=False):
 ## helper function: check if string contained in list (set) of strings
 def CheckAny(string,set):
 	for c in set:
+                
 		if c in string: return True
 	return False
 
@@ -316,7 +317,7 @@ def ComputeRelativeHumidity(inFile, pDim, outFile='none', temp='temp', sphum='sp
 
 ##############################################################################################
 def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', pfull='pfull', time='time', p0=1e3):
-	"""Computes the residual stream function \Psi* (as a function of time).
+	"""Computes the residual stream function Psi* (as a function of time).
 
 		INPUTS:
 			data	    - filename of input file or dictionary with temp,vcomp,lat,pfull
@@ -410,7 +411,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 
 ##############################################################################################
 def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='mean', p0=1e3):
-	"""Computes the residual stream function \Psi* (as a function of time).
+	"""Computes the residual stream function Psi* (as a function of time).
 
 		INPUTS:
 			v	    - meridional wind, xr.DataArray
@@ -653,7 +654,7 @@ def eof(X,n=-1,detrend='constant',eof_in=None):
 
 	# get the first n modes, in physical units
 	#  we can either project the data onto the principal component, X*V
-	#  or multiply u*s. This is the same, as U*S*V.H*V = U*S
+	#  or multiply u*s. This is the same, as X*V = U*S*V.H*V = U*S
 	if n < 0:
 		n = s.shape[0]
 	EOF = np.dot(u[:,:n],np.diag(s)[:n,:n])
@@ -950,11 +951,11 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
-		coordinates, i.e. do not include the geometric factor a*cos\phi.
+		coordinates, i.e. do not include the geometric factor a*cosphi.
 		Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
 		The divergence is in units of m/s/day, and therefore represents
 		the deceleration of the zonal wind. This is actually the quantity
-		1/(acos\phi)*div(F).
+		1/(acosphi)*div(F).
 
 	INPUTS:
 	  lat  - latitude [degrees]
@@ -968,8 +969,8 @@ def ComputeEPfluxDiv(lat,pres,u,v,t,w=None,do_ubar=False,wave=0):
 	OUTPUTS:
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
-	  div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
-	  div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
+	  div1 - horizontal EP-flux divergence, divided by a*cosphi [m/s/d]
+	  div2 - horizontal EP-flux divergence , divided by a*cosphi [m/s/d]
 	"""
 	# some constants
 	from .constants import Rd,cp,kappa,p0,Omega,a0
@@ -1066,11 +1067,11 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	""" Compute the EP-flux vectors and divergence terms.
 
 		The vectors are normalized to be plotted in cartesian (linear)
-		coordinates, i.e. do not incluxde the geometric factor a*cos\phi.
+		coordinates, i.e. do not incluxde the geometric factor a*cosphi.
 		Thus, ep1 is in [m2/s2], and ep2 in [hPa*m/s2].
 		The divergence is in units of m/s/day, and therefore represents
 		the deceleration of the zonal wind. This is actually the quantity
-		1/(acos\phi)*div(F).
+		1/(acosphi)*div(F).
 
 	INPUTS:
 	  u    - zonal wind, xarray.DataArray [m/s]
@@ -1087,8 +1088,8 @@ def ComputeEPfluxDivXr(u,v,t,lon='infer',lat='infer',pres='infer',time='time',re
 	OUTPUTS (all xarray.DataArray):
 	  ep1  - meridional EP-flux component, scaled to plot in cartesian [m2/s2]
 	  ep2  - vertical   EP-flux component, scaled to plot in cartesian [hPa*m/s2]
-	  div1 - horizontal EP-flux divergence, divided by acos\phi [m/s/d]
-	  div2 - horizontal EP-flux divergence , divided by acos\phi [m/s/d]
+	  div1 - horizontal EP-flux divergence, divided by a*cosphi [m/s/d]
+	  div2 - horizontal EP-flux divergence , divided by a*cosphi [m/s/d]
 	"""
 	# some constants
 	from .constants import Rd,cp,kappa,p0,Omega,a0
@@ -1760,10 +1761,10 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 	'''Compute the meridional gradient of potential vorticity.
 		Computed following Simpson et al JAS (2009) DOI 10.1175/2008JAS2758.1.
 		This quantity has three terms,
-		q_\phi = A - B + C, where
-				A = 2*Omega*cos\phi
-				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
-				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+		q_phi = A - B + C, where
+				A = 2*Omega*cosphi
+				B = partial_phi[partial_phi(u*cosphi)/acosphi]
+				C = af^2/Rd*partial_p(p*theta*partial_p*u/(T*partial_p*theta))
 
 		INPUTS:
 			lat	  - latitude [degrees]
@@ -1772,7 +1773,7 @@ def ComputeMeridionalPVGrad(lat, pres, uz, Tz, Rd=287.04, cp=1004, a0=6.371e6, c
 			Tz	  - zonal mean temperature [K], dim pres x lat OR N x pres x lat
 			component - option to only return one, two, or all of the components.
 						 Add a letter for each of the components 'A', 'B', 'C'.
-						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
+						 Note: As B has a minus sign in q_phi, option 'B' returns -B
 		OUTPUTS:
 			q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR N x pres x lat
 	'''
@@ -1844,10 +1845,10 @@ def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=100
 	'''Compute the meridional gradient of potential vorticity.
 		Computed following Simpson et al JAS (2009) DOI 10.1175/2008JAS2758.1.
 		This quantity has three terms,
-		q_\phi = A - B + C, where
-				A = 2*Omega*cos\phi
-				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
-				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+		q_phi = A - B + C, where
+				A = 2*Omega*cosphi
+				B = partial_phi[partial_phi(u*cosphi)/acosphi]
+				C = af^2/Rd*partial_p(p*theta*partial_p*u/(T*partial_p*theta))
 
 		INPUTS:
 			uz        - zonal mean zonal wind [m/s], dim pres x lat OR N x pres x lat
@@ -1856,7 +1857,7 @@ def ComputeMeridionalPVGradXr(uz, Tz, lat='lat', pres='level', Rd=287.04, cp=100
 			pres      - name of pressure [hPa]
 			component - option to only return one, two, or all of the components.
 						 Add a letter for each of the components 'A', 'B', 'C'.
-						 Note: As B has a minus sign in q_\phi, option 'B' returns -B
+						 Note: As B has a minus sign in q_phi, option 'B' returns -B
 		OUTPUTS:
 			q_phi - meridional gradient of potential vorticity [1/s], dim pres x lat OR N x pres x lat
 	'''
@@ -1912,14 +1913,14 @@ def ComputeRefractiveIndex(lat,pres,uz,Tz,k,N2const=None):
 		Setting k=0 means the only term depending on wave number is left out. This could be more efficient if n2(k) for different values of k is of interest.
 
 		meridonal PV gradient is
-		q_\phi = A - B + C, where
-				A = 2*Omega*cos\phi
-				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
-				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+		q_phi = A - B + C, where
+				A = 2*Omega*cosphi
+				B = partial_phi[partial_phi(u*cosphi)/acosphi]
+				C = af^2/Rd*partial_p(p*theta*partial_p*u/(T*partial_p*theta))
 		Total refractive index is
 		n2 = a^2*[D - E - F], where
-				D = q_\phi/(au)
-				E = (k/acos\phi)^2
+				D = q_phi/(au)
+				E = (k/acosphi)^2
 				F = (f/2NH)^2
 
 		Inputs are:
@@ -1970,14 +1971,14 @@ def ComputeRefractiveIndexXr(uz,Tz,k,lat='lat',pres='level',N2const=None,ulim=No
 		Setting k=0 means the only term depending on wave number is left out. This could be more efficient if n2(k) for different values of k is of interest.
 
 		meridonal PV gradient is
-		q_\phi = A - B + C, where
-				A = 2*Omega*cos\phi
-				B = \partial_\phi[\partial_\phi(ucos\phi)/acos\phi]
-				C = af^2/Rd*\partial_p(p\theta\partial_pu/(T\partial_p\theta))
+		q_phi = A - B + C, where
+				A = 2*Omega*cosphi
+				B = partial_phi[partial_phi(u*cosphi)/acosphi]
+				C = af^2/Rd*partial_p(p*theta*partial_p*u/(T*partial_p*theta))
 		Total refractive index is
 		n2 = a^2*[D - E - F], where
-				D = q_\phi/(au)
-				E = (k/acos\phi)^2
+				D = q_phi/(au)
+				E = (k/acosphi)^2
 				F = (f/2NH)^2
 
 		Inputs are:
@@ -2545,6 +2546,34 @@ def ComputeRossbyWaveSource(u,v):
 	return rws
 
 #######################################################
+def Ks(u,v,lat='infer'):
+	"""
+		Compute stationary Rossby number Ks = a*cosphi*sqrt(beta_star/U).
+		 beta_star is meridional absolute vorticity gradient and U zonal wind.
+
+		INPUTS:
+			u : zonal wind [m/s]
+			v : meridional wind [m/s]
+
+		OUTPUTS:
+			ks: Rossby wavenumber Ks
+	"""
+	from .constants import a0,coslat
+	from numpy import sqrt
+	from windspharm.xarray import VectorWind
+	# Create a VectorWind instance to handle the computations.
+	w = VectorWind(u, v)
+	eta = w.absolutevorticity()
+	etax, etay = w.gradient(eta)
+	if lat == 'infer':
+		dim_names = FindCoordNames(u)
+		lat = dim_names['lat']
+	ks = a0*coslat(u[lat])*sqrt(etay/u)
+	return ks
+	
+
+
+#######################################################
 def Projection(projection='EqualEarth',nrows=1,ncols=1,transform='PlateCarree',coast=False,kw_args=None,fig_args=None):
 	"""
 		Create a new figure with a given projection. To plot data, invoke:
@@ -2875,7 +2904,7 @@ def StackArray(x,dim):
 				dims.append(d)
 	return x.stack(stacked=dims)
 
-def ComputeStat(i,sx,y,sy,test):
+def ComputeStat(i,sx,y,sy,test,df=None):
 	'''This is part of StatTest, but for parmap.map to work, it has to be an
 		independent function.
 	'''
@@ -2888,16 +2917,21 @@ def ComputeStat(i,sx,y,sy,test):
 		ploc = 1.0
 	else:
 		if test == 'KS':
-			_,ploc = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
+			t,ploc = stats.ks_2samp(sx.isel(stacked=i),sy.isel(stacked=i))
+			if df is not None:
+				ploc = stats.kstwo(t,df)*2
 		elif test == 'MW':
+			# note: MW is for independent samples only. df does not make sense here
 			_,ploc = stats.mannwhitneyu(sx.isel(stacked=i),sy.isel(stacked=i),alternative='two-sided')
 		elif test == 'WC':
 			_,ploc = stats.wilcoxon(sx.isel(stacked=i),sy.isel(stacked=i))
 		elif test == 'T':
-			_,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
+			t,ploc = stats.ttest_1samp(sx.isel(stacked=i),y)
+			if df is not None:
+				ploc = stats.t.sf(t,df)*2
 		elif test == 'sign': # not really a sig test, just checking sign agreement
-                        # note that here a high p-value means significant, as it means
-                        #  that a lot of members have the same sign
+			# note that here a high p-value means significant, as it means
+			#  that a lot of members have the same sign
 			lenx = len(sx.isel(stacked=i))
 			if y is None: # check sx for same sign
 				posx = np.sum(sx.isel(stacked=i) > 0)
@@ -2920,7 +2954,7 @@ def ComputeStat(i,sx,y,sy,test):
 				ploc = min(posx,posy)/max(posx,posy)
 	return ploc
 
-def StatTest(x,y,test,dim=None,parallel=False):
+def StatTest(x,y,test,dim=None,parallel=False,df=None):
 	'''Compute statistical test for significance between
 	   two xr.DataArrays. Testing will be done along dimension with name `dim`
 	   and the output p-value will have all dimensions except `dim`.
@@ -2935,7 +2969,8 @@ def StatTest(x,y,test,dim=None,parallel=False):
 		    'WC' -> Wilcoxon
 		    'T'  -> T-test 1 sample with y=mean
                     'sign'->test against sign only.
-		  parallel: Run the test in parallel? Requires the parmap package.
+	      parallel: Run the test in parallel? Requires the parmap package.
+              df:  how many degrees of freedom. use n-1 if None
 	   OUTPUTS:
 	      pvalx: xr.DataArray containing the p-values.
 		     Same dimension as x,y except `dim`.
@@ -2957,11 +2992,11 @@ def StatTest(x,y,test,dim=None,parallel=False):
 	else:
 		sy = None
 	if parallel:
-		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test)
+		pval = parmap.map(ComputeStat,list(range(nspace)),sx,y,sy,test,df)
 	else:
 		pval = np.zeros(sx.stacked.shape)
 		for i in range(nspace):
-			pval[i] = ComputeStat(i,sx,y,sy,test)
+			pval[i] = ComputeStat(i,sx,y,sy,test,df)
 	if nspace > 1:
 		pvalx = DataArray(pval,coords=[sx.stacked],name='pval').unstack('stacked')
 	else:
@@ -3670,7 +3705,7 @@ def ComputeTdew(T,RH,fast=False):
 
        INPUTS:
          T  : temperature, [K]
-         RH : relative humidity, [% \in [0,100]]
+         RH : relative humidity, [% in [0,100]]
          fast: use approximated equation (1) instead
  
        OUTPUTS:
