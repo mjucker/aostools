@@ -333,7 +333,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 			psis	    - residual stream function, as a function of time
 	"""
 	import netCDF4 as nc
-	from scipy.integrate import cumtrapz
+	from scipy.integrate import cumulative_trapezoid as cumptrapz
 	import os
 
 	# some constants
@@ -1228,7 +1228,7 @@ def ComputeStreamfunction(u,v,lat='lat',lon='lon',use_windspharm=False,lat0=0,lo
 		# nlons = len(lons)
 		j0 = np.argmin(np.abs(lats-lat0))
 		i0 = np.argmin(np.abs(lons-lon0))
-		from scipy.integrate import cumtrapz
+		from scipy.integrate import cumulative_trapezoid as cumtrapz
 		#
 		## first, fix phi0
 		#
@@ -2482,7 +2482,9 @@ def StandardGrid(data,lon_name='infer',lat_name='infer',pres_name='infer',rename
 			data = data.sortby(p_name,ascending=True)
 	if rename:
 		data = data.rename(dict(map(reversed, dim_names.items())))
-	return data
+		lon_name = 'lon'
+	# sometimes we get multiple 0 longitude and such things
+	return data.drop_duplicates(lon_name)
 
 #######################################################
 def ERA2Model(data,lon_name='longitude',lat_name='latitude'):
@@ -3136,15 +3138,15 @@ def FindCoordNames(ds):
 	ldims = [d.lower() for d in odims]
 	dim_names = {}
 	# check for longitude
-	for lon in ['longitude','lon','xt_ocean','lon_sub1']:
+	for lon in ['longitude','lon','xt_ocean','lon_sub1','x']:
 		if lon in ldims:
 			indx = ldims.index(lon)
 			dim_names['lon'] = odims[indx]
-	for lat in ['latitude','lat','yt_ocean','lat_sub1']:
+	for lat in ['latitude','lat','yt_ocean','lat_sub1','y']:
 		if lat in ldims:
 			indx = ldims.index(lat)
 			dim_names['lat'] = odims[indx]
-	for plev in ['level','pres','pfull','lev','plev','pressure_level','lev_p']:
+	for plev in ['level','pres','pfull','lev','plev','pressure_level','lev_p','isobaric','isobaricInhPa']:
 		if plev in ldims:
 			indx = ldims.index(plev)
 			dim_names['pres'] = odims[indx]
