@@ -2840,14 +2840,18 @@ def Anomaly(da,groupby='time.dayofyear',climate=None):
 
 	INPUTS:
 	   da	  : xarray.DataArray or xarray.Dataset from which to compute anomalies.
-	   groupby: defines frequency for anomalies. If None, return anomalies with respect to total average (useful if only one-dimensional).
+	   groupby: defines frequency for anomalies. Use 'time.dayhour' to compute anomalies with respect to hour of day and day of the year (useful for sub-daily data). If None, return anomalies with respect to total average (useful if only one-dimensional).
 	   climate: define period for baseline climatology. list of two dates [string]. All time steps if None.
 	OUTPUTS:
 	   da	  : input array as anomalies with respect to `groupby`
 	'''
 	if groupby is None: # only one dimension
 		return da - da.mean()
-	time_name = groupby.split('.')[0]
+	time_name,time_freq = groupby.split('.')
+	if time_freq.lower() == 'dayhour':
+		import xarray as xr
+		da['dayhour'] = xr.DataArray(['{0:03}-{1:02}'.format(t.dt.dayofyear,t.dt.hour) for t in da[time_name]],coords=[da[time_name]],name='dayhour')
+		groupby = 'dayhour'
 	if climate is None:
 		clim_filtr = {time_name : slice(da[time_name][0],da[time_name][-1])}
 	else:
