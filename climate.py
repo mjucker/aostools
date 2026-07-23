@@ -3345,19 +3345,25 @@ def Vorticity(u,v,use_windspharm=False,lon='infer',lat='infer'):
         return vort*180/np.pi        
 
 #######################################################
-def PotentialTemperature(t,p,p0=1e3):
+def PotentialTemperature(t,p,p0=1e3,q=None):
     '''Compute potential temperature theta = T*(p0/p)**kappa
+        or equivalent potential temperature theta_e = (T+L/Cp*r)*(p0/p)**kappa
    
      INPUTS:
         t : temperature in  Kelvins
         p : pressure in same units as p0 [defaults to hPa]
         p0: reference pressure [1000hPa]
+        q:  specific humidity [kg/kg]. Computes dry theta if q=None
 
      OUTPUTS:
         potential temperature in Kelvins
     '''
-    from .constants import kappa
-    return t*(p0/p)**kappa
+    from .constants import kappa,cp,HLV
+    if q is None:    
+        return t*(p0/p)**kappa
+    else:
+        r = q/(1-q) # mixing ratio
+        return (t+HLV/cp*r)*(p0/p)**kappa
 
 #######################################################
 def PotentialVorticity(u,v,t,use_windspharm=False,lon='infer',lat='infer',pres='infer'):
