@@ -333,7 +333,7 @@ def ComputePsi(data, outFileName='none', temp='temp', vcomp='vcomp', lat='lat', 
 			psis	    - residual stream function, as a function of time
 	"""
 	import netCDF4 as nc
-	from scipy.integrate import cumulative_trapezoid as cumptrapz
+	from scipy.integrate import cumulative_trapezoid as cumtrapz
 	import os
 
 	# some constants
@@ -428,7 +428,7 @@ def ComputePsiXr(v, t, lon='lon', lat='lat', pres='level', time='time', ref='mea
 			psi	    - stream function, as a function of time
 			psis	    - residual stream function, as a function of time
 	"""
-	from scipy.integrate import cumtrapz
+	from scipy.integrate import cumulative_trapezoid as cumtrapz
 	from numpy import cos,deg2rad
 	# some constants
 	from .constants import kappa,a0,g
@@ -517,7 +517,7 @@ def ComputeVertEddy(v,t,p,p0=1e3,wave=0):
 	t_bar = np.nanmean(t,axis=-1) # t_bar = theta_bar
 	# prepare pressure derivative
 	dthdp = np.gradient(t_bar,edge_order=2)[1]/dp # dthdp = d(theta_bar)/dp
-	dthdp[dthdp==0] = np.NaN
+	dthdp[dthdp==0] = np.nan
 	# time mean of d(theta_bar)/dp
 	dthdp = np.nanmean(dthdp,axis=0)[np.newaxis,:]
 	# now get wave component
@@ -1644,6 +1644,7 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	OUTPUTS:
 	  integ- averaged data, length N
 	"""
+	from scipy.integrate import trapezoid
 	#make sure there are more than one grid points
 	if len(lat) < 2:
 		return np.mean(data,axis=axis)
@@ -1654,8 +1655,8 @@ def GlobalAvg(lat,data,axis=-1,lim=20,mx=90,cosp=1):
 	#cosine weighting
 	J = np.where((lat>=lim)*(lat<=mx))[0]
 	coslat = np.cos(np.deg2rad(lat))**cosp
-	coswgt = np.trapz(coslat[J],lat[J])
-	tmp = np.trapz(tmp[J,:]*coslat[J][:,np.newaxis],lat[J],axis=0)/coswgt
+	coswgt = trapezoid(coslat[J],lat[J])
+	tmp = trapezoid(tmp[J,:]*coslat[J][:,np.newaxis],lat[J],axis=0)/coswgt
 	integ = np.reshape(tmp,shpe[1:])
 	return integ
 
@@ -2346,6 +2347,7 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
 		dT	- dictionary with options ['S'] and ['N'] if hemi='both'
 					otherwise array of length len(time)
 	"""
+	from scipy.integrate import trapezoid
 
 	numTimeSteps = tempIn.shape[0]
 	# get important meridional grid points
@@ -2385,8 +2387,8 @@ def ComputeBaroclinicity(lat, tempIn, hemi='both', minLat=20, maxLat=60, pres=No
 		if pres is None:
 			tmp = np.squeeze(T[H])
 		else:
-			tmp = np.trapz(T[H],pres[K],axis=1)
-			tmp = tmp/np.trapz(np.ones_like(pres[K]),pres[K])
+			tmp = trapezoid(T[H],pres[K],axis=1)
+			tmp = tmp/trapezoid(np.ones_like(pres[K]),pres[K])
 		# zero index is closer to tropics
 		#  define bariclinicity as -dyT
 		dT[H] = tmp[:,0] - tmp[:,1]
@@ -2506,7 +2508,7 @@ def ComputeGeostrophicWind(Z,lon_name='longitude',lat_name='latitude',qg_limit=5
 	grav = 9.81
 	# f = 0 at the equator, which will obviously be a problem
 	#  so we make f=infty there so that u,v = 0 between -qg_limit and +qg_limit
-	f = 2*Omega*np.sin(np.deg2rad(Z[lat_name])).where(np.abs(Z[lat_name])>qg_limit,np.infty)
+	f = 2*Omega*np.sin(np.deg2rad(Z[lat_name])).where(np.abs(Z[lat_name])>qg_limit,np.inf)
 	cosPhi = np.cos(np.deg2rad(Z[lat_name]))
 	u = -grav*Z.differentiate(lat_name)/f/a0
 	v =  grav*Z.differentiate(lon_name)/f/a0/cosPhi
